@@ -45,6 +45,7 @@ jobs:
           DISCOGS_USERNAME: ${{ secrets.DISCOGS_USERNAME }}
           LISTENER_PASSWORD: ${{ secrets.LISTENER_PASSWORD }}
           GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
+          CLUSTER_KEY: ${{ secrets.CLUSTER_KEY }}
         run: python scripts/build_data.py --refresh ${{ github.event_name == 'schedule' && 250 || 0 }} --limit ${{ inputs.limit || 0 }}
       - name: Assemble site
         run: |

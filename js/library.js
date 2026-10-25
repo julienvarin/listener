@@ -20,6 +20,7 @@ export class Library {
     this.gistToken = payload.gist_token || '';
     this.releases = payload.releases;
     this.clusters = payload.clusters || [];
+    this.regions = payload.regions || [];
     this.discogsValue = payload.collection_value || {};
     this.byId = new Map();
     this.itemCache = new Map();
@@ -50,6 +51,7 @@ export class Library {
     this.formats = this.group((r) => r.formats);
     this.myGenres = this.group((r) => (r.myGenre ? [r.myGenre] : []));
     this.clusterMembers = this.group((r) => (r.cluster === undefined ? [] : [r.cluster]));
+    this.regionMembers = this.group((r) => (r.region === undefined ? [] : [r.region]));
     // Vote-weighted rating: pulls ratings with few votes toward the collection average.
     const rated = this.releases.filter((r) => r.votes);
     const mean = rated.reduce((a, r) => a + r.community_rating * r.votes, 0) / (rated.reduce((a, r) => a + r.votes, 0) || 1);

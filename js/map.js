@@ -8,7 +8,12 @@ const OTHER = '#c7c7cc';
 const MODES = [['cluster', 'Clusters'], ['style', 'Style'], ['decade', 'Decade'], ['label', 'Label'], ['mygenre', 'My Genre']];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const pct = (v) => `${Math.round(v * 100)}%`;
-const clusterColor = (id) => `hsl(${(id * 137.508) % 360} 68% 52%)`;
+
+function composition(c) {
+  const line = (label, items) => items?.length ? `<p class="map-def"><span>${label}</span>${items.map(([k, v]) => `${esc(k)} <em>${pct(v)}</em>`).join(', ')}</p>` : '';
+  return `${line('Styles', c.styles?.slice(0, 4))}${line('Your notes', c.moods)}${line('Countries', c.countries)}${line('Era', c.decades)}${line('Labels', c.labels)}${line('Your tags', c.own)}`;
+}
+const regionHue = (id) => (id * 360 / 12 + 8) % 360;
 
 const keyOf = {
   cluster: (r) => (r.cluster === undefined ? '' : String(r.cluster)),
@@ -26,11 +31,23 @@ export class CollectionMap {
     this.nodes = lib.releases.filter((r) => r.xy).map((r) => ({ r, x: r.xy[0], y: r.xy[1] }));
     this.byId = new Map(this.nodes.map((n) => [n.r.id, n]));
     this.clusters = new Map(lib.clusters.map((c) => [c.id, c]));
-    // Labels sit just above each island so they don't cover its records.
+    this.regions = new Map(lib.regions.map((g) => [g.id, g]));
+    // Mini clusters share their region's hue, with a different shade each.
+    const shade = new Map();
     for (const c of this.clusters.values()) {
-      const ys = this.nodes.filter((n) => n.r.cluster === c.id).map((n) => n.y).sort((a, b) => a - b);
-      c.top = ys.length ? ys[Math.floor(ys.length * 0.06)] : c.y;
+      const i = shade.get(c.region) || 0;
+      shade.set(c.region, i + 1);
+      c.color = `hsl(${regionHue(c.region ?? c.id)} ${62 + (i % 3) * 8}% ${40 + (i % 4) * 7}%)`;
     }
+    for (const g of this.regions.values()) g.color = `hsl(${regionHue(g.id)} 70% 46%)`;
+    this.region = null;
+    // Labels sit just above each island so they don't cover its records.
+    const topOf = (pick) => {
+      const ys = this.nodes.filter(pick).map((n) => n.y).sort((a, b) => a - b);
+      return ys.length ? ys[Math.floor(ys.length * 0.06)] : null;
+    };
+    for (const c of this.clusters.values()) c.top = topOf((n) => n.r.cluster === c.id) ?? c.y;
+    for (const g of this.regions.values()) g.top = topOf((n) => n.r.region === g.id) ?? g.y;
     this.view = { x: 500, y: 500, k: 1 };
     this.images = new Map();
     this.hover = null;
@@ -46,7 +63,7 @@ export class CollectionMap {
       <canvas class="map-canvas"></canvas>
       <div class="map-top">
         <div class="map-title"><h1>Collection Map</h1>
-          <p>Each island is a group of records sharing styles, eras, labels and your genre tags. Click an island’s name to see what defines it, or a record to see what it has in common with its neighbours.</p></div>
+          <p>Regions split into smaller crates as you zoom in. Records sit together when they share styles, eras, labels, countries, your genre tags and the words in your notes. Click a name to see what defines it.</p></div>
         <div class="segmented">${MODES.map(([k, l]) => `<button data-mode="${k}">${l}</button>`).join('')}</div>
         <label class="filter-field map-search">${icon('search')}<input type="search" placeholder="Highlight artist, label, style…"></label>
       </div>
@@ -76,7 +93,8 @@ export class CollectionMap {
       if (!b) return;
       if (this.mode === 'cluster') {
         const id = Number(b.dataset.cat);
-        this.selectCluster(this.cluster?.id === id ? null : this.clusters.get(id), true);
+        if (this.regions.size) this.selectRegion(this.region?.id === id ? null : this.regions.get(id), true);
+        else this.selectCluster(this.cluster?.id === id ? null : this.clusters.get(id), true);
         return;
       }
       this.isolate = this.isolate === b.dataset.cat ? null : b.dataset.cat;
@@ -91,8 +109,11 @@ export class CollectionMap {
       else if (a === 'open') opts.onOpen(this.selected.r.id);
       else if (a === 'play-cluster') opts.onPlay(this.lib.clusterMembers.get(this.cluster.id).map((r) => r.id), true);
       else if (a === 'open-cluster') opts.onOpenCluster(this.cluster.id);
-      else if (a === 'close') { this.select(null); this.selectCluster(null); }
+      else if (a === 'play-region') opts.onPlay(this.lib.regionMembers.get(this.region.id).map((r) => r.id), true);
+      else if (a === 'open-region') opts.onOpenRegion(this.region.id);
+      else if (a === 'close') { this.select(null); this.selectCluster(null); this.selectRegion(null); }
       else if (a.startsWith('cluster:')) this.selectCluster(this.clusters.get(Number(a.slice(8))), true);
+      else if (a.startsWith('region:')) this.selectRegion(this.regions.get(Number(a.slice(7))), true);
       else this.select(this.byId.get(Number(a)), true);
     });
 
@@ -103,6 +124,7 @@ export class CollectionMap {
     this.resize();
     if (opts.focus && this.byId.has(opts.focus)) this.select(this.byId.get(opts.focus), true);
     else if (opts.cluster !== null && this.clusters.has(opts.cluster)) this.selectCluster(this.clusters.get(opts.cluster), true);
+    else if (opts.region !== null && this.regions.has(opts.region)) this.selectRegion(this.regions.get(opts.region), true);
     this.draw();
   }
 
@@ -120,8 +142,9 @@ export class CollectionMap {
       if (b.dataset.mode === 'cluster') b.hidden = !hasClusters;
     });
     if (this.mode === 'cluster') {
-      this.colors = new Map([...this.clusters.keys()].map((id) => [String(id), clusterColor(id)]));
-      this.legend = [...this.clusters.values()].map((c) => [String(c.id), c.size, c.name]);
+      this.colors = new Map([...this.clusters.values()].map((c) => [String(c.id), c.color]));
+      const top = this.regions.size ? [...this.regions.values()] : [...this.clusters.values()];
+      this.legend = top.map((c) => [String(c.id), c.size, c.name, c.color]);
     } else {
       const counts = new Map();
       for (const n of this.nodes) {
@@ -131,7 +154,7 @@ export class CollectionMap {
       let cats = [...counts].sort((a, b) => b[1] - a[1]).slice(0, PALETTE.length);
       if (this.mode === 'decade') cats = cats.sort((a, b) => a[0].localeCompare(b[0]));
       this.colors = new Map(cats.map(([k], i) => [k, PALETTE[i]]));
-      this.legend = cats.map(([k, n]) => [k, n, k]);
+      this.legend = cats.map(([k, n]) => [k, n, k, this.colors.get(k)]);
     }
     for (const n of this.nodes) {
       n.cat = keyOf[this.mode](n.r) || '';
@@ -142,9 +165,10 @@ export class CollectionMap {
   }
 
   renderLegend() {
-    const active = this.mode === 'cluster' ? (this.cluster ? String(this.cluster.id) : null) : this.isolate;
-    this.root.querySelector('.map-legend').innerHTML = this.legend.map(([k, n, label]) =>
-      `<button data-cat="${esc(k)}" class="${active && active !== k ? 'dim' : ''}"><i style="background:${this.colors.get(k)}"></i>${esc(label)}<span>${n}</span></button>`).join('');
+    const focus = this.regions.size ? this.region?.id ?? (this.cluster ? this.cluster.region : null) : this.cluster?.id;
+    const active = this.mode === 'cluster' ? (focus != null ? String(focus) : null) : this.isolate;
+    this.root.querySelector('.map-legend').innerHTML = this.legend.map(([k, n, label, color]) =>
+      `<button data-cat="${esc(k)}" class="${active && active !== k ? 'dim' : ''}"><i style="background:${color}"></i>${esc(label)}<span>${n}</span></button>`).join('');
   }
 
   resize() {
@@ -174,6 +198,7 @@ export class CollectionMap {
 
   matches(n) {
     if (this.cluster && n.r.cluster !== this.cluster.id) return false;
+    if (this.region && n.r.region !== this.region.id) return false;
     if (this.isolate && n.cat !== this.isolate) return false;
     return !this.query || n.r.hay.includes(this.query);
   }
@@ -189,7 +214,7 @@ export class CollectionMap {
   }
 
   labelAt(sx, sy) {
-    return this.labelRects.find((l) => sx >= l.x && sx <= l.x + l.w && sy >= l.y && sy <= l.y + l.h)?.c || null;
+    return this.labelRects.find((l) => sx >= l.x && sx <= l.x + l.w && sy >= l.y && sy <= l.y + l.h) || null;
   }
 
   size() { return Math.min(84, 5 * this.view.k); }
@@ -217,7 +242,7 @@ export class CollectionMap {
     ctx.clearRect(0, 0, this.w, this.h);
     const covers = this.view.k > 3.5;
     const size = this.size();
-    const filtering = !!(this.query || this.isolate || this.cluster);
+    const filtering = !!(this.query || this.isolate || this.cluster || this.region);
     const pad = size + 4;
 
     for (const pass of filtering ? [false, true] : [true]) {
@@ -267,24 +292,38 @@ export class CollectionMap {
 
     this.labelRects = [];
     if (covers || !this.clusters.size) return;
+    const showRegions = this.regions.size && this.view.k < 1.7 && !this.cluster;
+    const items = showRegions ? [...this.regions.values()] : [...this.clusters.values()];
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    for (const c of this.clusters.values()) {
+    for (const c of items) {
       if (this.cluster && c.id !== this.cluster.id) continue;
-      const fs = Math.round(Math.min(17, 11 + Math.sqrt(c.size) / 3));
-      ctx.font = `600 ${fs}px -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif`;
-      const tw = ctx.measureText(c.name).width;
+      if (!showRegions && this.region && c.region !== this.region.id) continue;
+      const fs = showRegions ? 16 : 13;
+      const font = (size, weight) => `${weight} ${size}px -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif`;
+      ctx.font = font(fs, showRegions ? 700 : 600);
+      const nameW = ctx.measureText(c.name).width;
+      const facts = showRegions ? '' : c.facts || '';
+      ctx.font = font(11, 400);
+      const factsW = facts ? ctx.measureText(facts).width : 0;
+      const w = Math.max(nameW, factsW) + 18;
+      const h = facts ? fs + 24 : fs + 12;
       const [cx, top] = this.toScreen({ x: c.x, y: c.top });
-      const cy = top - fs / 2 - 10;
-      const box = { x: cx - tw / 2 - 8, y: cy - fs / 2 - 6, w: tw + 16, h: fs + 12, c };
+      const box = { x: cx - w / 2, y: top - h - 8, w, h, c, kind: showRegions ? 'region' : 'cluster' };
       if (this.labelRects.some((p) => box.x < p.x + p.w && box.x + box.w > p.x && box.y < p.y + p.h && box.y + box.h > p.y)) continue;
       this.labelRects.push(box);
-      ctx.fillStyle = 'rgba(255,255,255,.88)';
+      ctx.fillStyle = 'rgba(255,255,255,.9)';
       ctx.beginPath();
-      ctx.roundRect(box.x, box.y, box.w, box.h, box.h / 2);
+      ctx.roundRect(box.x, box.y, box.w, box.h, 10);
       ctx.fill();
-      ctx.fillStyle = '#1d1d1f';
-      ctx.fillText(c.name, cx, cy + 0.5);
+      ctx.fillStyle = showRegions ? c.color : '#1d1d1f';
+      ctx.font = font(fs, showRegions ? 700 : 600);
+      ctx.fillText(c.name, cx, box.y + (facts ? fs / 2 + 6 : h / 2 + 0.5));
+      if (facts) {
+        ctx.fillStyle = '#86868b';
+        ctx.font = font(11, 400);
+        ctx.fillText(facts, cx, box.y + fs + 14);
+      }
     }
   }
 
@@ -292,7 +331,7 @@ export class CollectionMap {
     if (!n) { this.tip.hidden = true; return; }
     const r = n.r;
     const c = this.clusters.get(r.cluster);
-    this.tip.innerHTML = `<img src="${esc(r.thumb || r.cover)}" alt=""><div><b>${esc(r.title)}</b><span>${esc(r.artist)}</span><small>${esc([r.label, r.year].filter(Boolean).join(' · '))}</small>${c ? `<small>${esc(c.name)}</small>` : ''}</div>`;
+    this.tip.innerHTML = `<img src="${esc(r.thumb || r.cover)}" alt=""><div><b>${esc(r.title)}</b><span>${esc(r.artist)}</span><small>${esc([r.label, r.year].filter(Boolean).join(' · '))}</small>${c ? `<small style="color:${c.color}">${esc(c.name)}</small>` : ''}</div>`;
     this.tip.hidden = false;
     const tw = this.tip.offsetWidth, th = this.tip.offsetHeight;
     this.tip.style.left = `${Math.min(sx + 14, this.w - tw - 8)}px`;
@@ -303,6 +342,7 @@ export class CollectionMap {
     this.selected = n;
     if (!n) { this.cardEl.hidden = true; this.draw(); return; }
     this.cluster = null;
+    this.region = null;
     this.renderLegend();
     if (center) { this.view.x = n.x; this.view.y = n.y; this.view.k = Math.max(this.view.k, 7); }
     const r = n.r;
@@ -312,7 +352,7 @@ export class CollectionMap {
     this.cardEl.innerHTML = `
       <button class="icon-btn map-card-close" data-map-action="close" aria-label="Close">${icon('close')}</button>
       <div class="map-card-head"><img src="${esc(r.cover)}" alt=""><div><b>${esc(r.title)}</b><span>${esc(r.artist)}</span><small>${esc([r.label, r.catno, r.year].filter(Boolean).join(' · '))}</small>
-        ${c ? `<button class="map-cluster-link" data-map-action="cluster:${c.id}"><i style="background:${clusterColor(c.id)}"></i>${esc(c.name)}</button>` : ''}</div></div>
+        ${c ? `<button class="map-cluster-link" data-map-action="cluster:${c.id}"><i style="background:${c.color}"></i>${esc(c.name)}</button>` : ''}</div></div>
       <div class="head-actions"><button class="btn btn-primary" data-map-action="play">${icon('play')}Play</button><button class="btn" data-map-action="open">Open Album</button></div>
       ${sim.length ? `<p class="map-card-label">Most similar · ringed on the map</p><div class="map-sim">${sim.map((m) => `<button data-map-action="${m.r.id}"><img src="${esc(m.r.thumb || m.r.cover)}" alt=""><span><b>${esc(m.r.title)}</b><small>${esc(m.r.artist)}</small><em>${esc(sharedTraits(r, m.r).join(' · ') || 'Similar overall')}</em></span></button>`).join('')}</div>` : ''}`;
     this.cardEl.hidden = false;
@@ -322,23 +362,43 @@ export class CollectionMap {
   selectCluster(c, center = false) {
     this.cluster = c;
     this.selected = null;
+    this.region = null;
     this.renderLegend();
     if (!c) { this.cardEl.hidden = true; this.draw(); return; }
-    if (center) { this.view.x = c.x; this.view.y = c.y; this.view.k = Math.max(this.view.k, 2.2); }
+    if (center) { this.view.x = c.x; this.view.y = c.y; this.view.k = Math.max(this.view.k, 2.6); }
     const members = this.lib.clusterMembers.get(c.id) || [];
     const covers = members.filter((r) => r.cover && !r.cover.includes('spacer.gif')).slice(0, 6);
-    const line = (label, items) => items.length ? `<p class="map-def"><span>${label}</span>${items.map(([k, v]) => `${esc(k)} <em>${pct(v)}</em>`).join(', ')}</p>` : '';
+    const g = this.regions.get(c.region);
     const { icon } = this.opts;
     this.cardEl.innerHTML = `
       <button class="icon-btn map-card-close" data-map-action="close" aria-label="Close">${icon('close')}</button>
-      <p class="map-card-label"><i class="dot" style="background:${clusterColor(c.id)}"></i>Cluster · ${c.size} records</p>
-      <h2 class="map-cluster-name">${esc(c.name)}</h2>
-      ${line('Styles', c.styles)}
-      ${line('Era', c.decades)}
-      ${line('Your tags', c.own)}
-      ${line('Labels', c.labels)}
+      ${g ? `<button class="map-card-label map-region-link" data-map-action="region:${g.id}"><i class="dot" style="background:${g.color}"></i>${esc(g.name)}</button>` : ''}
+      <h2 class="map-cluster-name" style="color:${c.color}">${esc(c.name)}</h2>
+      <p class="map-facts">${esc(c.facts || `${c.size} records`)}</p>
+      ${composition(c)}
       <div class="map-near">${covers.map((r) => `<button data-map-action="${r.id}" title="${esc(`${r.artist} — ${r.title}`)}"><img src="${esc(r.thumb || r.cover)}" alt=""></button>`).join('')}</div>
       <div class="head-actions"><button class="btn btn-primary" data-map-action="play-cluster">${icon('shuffle')}Shuffle</button><button class="btn" data-map-action="open-cluster">See All</button></div>`;
+    this.cardEl.hidden = false;
+    this.draw();
+  }
+
+  selectRegion(g, center = false) {
+    this.region = g;
+    this.cluster = null;
+    this.selected = null;
+    this.renderLegend();
+    if (!g) { this.cardEl.hidden = true; this.draw(); return; }
+    if (center) { this.view.x = g.x; this.view.y = g.y; this.view.k = Math.max(this.view.k, 1.8); }
+    const minis = [...this.clusters.values()].filter((c) => c.region === g.id).sort((a, b) => b.size - a.size);
+    const { icon } = this.opts;
+    this.cardEl.innerHTML = `
+      <button class="icon-btn map-card-close" data-map-action="close" aria-label="Close">${icon('close')}</button>
+      <p class="map-card-label"><i class="dot" style="background:${g.color}"></i>Region</p>
+      <h2 class="map-cluster-name" style="color:${g.color}">${esc(g.name)}</h2>
+      <p class="map-facts">${esc(g.facts || `${g.size} records`)}</p>
+      ${composition(g)}
+      <div class="map-minis">${minis.map((c) => `<button data-map-action="cluster:${c.id}"><i style="background:${c.color}"></i><span><b>${esc(c.name)}</b><small>${esc(c.facts || '')}</small></span></button>`).join('')}</div>
+      <div class="head-actions"><button class="btn btn-primary" data-map-action="play-region">${icon('shuffle')}Shuffle</button><button class="btn" data-map-action="open-region">See All</button></div>`;
     this.cardEl.hidden = false;
     this.draw();
   }
@@ -404,7 +464,7 @@ export class CollectionMap {
         const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
         const label = this.labelAt(sx, sy);
         const n = label ? null : this.nodeAt(sx, sy);
-        if (label) this.selectCluster(label, true);
+        if (label) label.kind === 'region' ? this.selectRegion(label.c, true) : this.selectCluster(label.c, true);
         else if (n) this.select(n);
         else { this.select(null); this.selectCluster(null); }
       }

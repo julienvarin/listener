@@ -111,6 +111,7 @@ function render() {
     mygenres: () => tilesView('My Genres', lib.myGenres, 'mygenre'),
     mygenre: () => collectionView(arg, 'My Genre', lib.myGenres.get(arg), r, false, 'added'),
     cluster: () => clusterView(Number(arg), r),
+    region: () => regionView(Number(arg), r),
     recent: () => browseView('Recently Added', lib.releases, r, { sort: 'added' }),
     albums: () => browseView('Albums', lib.releases, r, { sort: 'artist' }),
     artists: () => indexView('Artists', lib.artists, 'artist', true),
@@ -329,21 +330,38 @@ function collectionView(name, kind, releases, r, round = false, defaultSort = 'y
   mountChunks($('#grid'), viewReleases, card);
 }
 
+function compositionLine(c) {
+  const pct = (items) => items.map(([k, v]) => `${esc(k)} ${Math.round(v * 100)}%`).join(', ');
+  return [
+    c.moods?.length && `your notes: ${pct(c.moods.slice(0, 3))}`,
+    c.countries?.length && pct(c.countries.slice(0, 2)),
+    c.labels?.length && pct(c.labels.slice(0, 2)),
+  ].filter(Boolean).join(' · ');
+}
+
 function clusterView(id, r) {
   const c = lib.clusters.find((x) => x.id === id);
   const releases = lib.clusterMembers.get(id);
   if (!c || !releases) return emptyView('Cluster not found');
+  const g = lib.regions.find((x) => x.id === c.region);
   const tb = toolbar(releases, r.q, 'artist');
   viewReleases = tb.filtered.slice().sort(SORTS[tb.sort][1]);
-  const pct = (items) => items.map(([k, v]) => `${esc(k)} ${Math.round(v * 100)}%`).join(', ');
-  const sub = [
-    plural(releases.length, 'album'),
-    c.styles.length && pct(c.styles.slice(0, 3)),
-    c.decades.length && `mostly ${pct(c.decades.slice(0, 1))}`,
-    c.own.length && `your tags: ${pct(c.own)}`,
-    `<a href="#/map?cluster=${id}">Show on map</a>`,
-  ].filter(Boolean).join(' · ');
-  $('#main').innerHTML = `${header(c.name, { kicker: 'Cluster', sub, extra: tb.html })}<div class="grid" id="grid"></div>`;
+  const sub = [esc(c.facts || plural(releases.length, 'album')), compositionLine(c), `<a href="#/map?cluster=${id}">Show on map</a>`].filter(Boolean).join(' · ');
+  const kicker = g ? g.name : 'Cluster';
+  $('#main').innerHTML = `${header(c.name, { kicker, sub, extra: tb.html })}<div class="grid" id="grid"></div>`;
+  mountChunks($('#grid'), viewReleases, card);
+}
+
+function regionView(id, r) {
+  const g = lib.regions.find((x) => x.id === id);
+  const releases = lib.regionMembers.get(id);
+  if (!g || !releases) return emptyView('Region not found');
+  const tb = toolbar(releases, r.q, 'artist');
+  viewReleases = tb.filtered.slice().sort(SORTS[tb.sort][1]);
+  const minis = lib.clusters.filter((c) => c.region === id).sort((a, b) => b.size - a.size);
+  const chips = `<div class="chips">${minis.map((c) => `<a class="chip" href="#/cluster/${c.id}">${esc(c.name)} <span>${c.size}</span></a>`).join('')}</div>`;
+  const sub = [esc(g.facts || plural(releases.length, 'album')), compositionLine(g), `<a href="#/map?region=${id}">Show on map</a>`].filter(Boolean).join(' · ');
+  $('#main').innerHTML = `${header(g.name, { kicker: 'Region', sub, extra: chips + tb.html })}<div class="grid" id="grid"></div>`;
   mountChunks($('#grid'), viewReleases, card);
 }
 
@@ -683,10 +701,12 @@ function mapView(r) {
     colorBy: r.q.get('color') || 'cluster',
     focus: Number(r.q.get('focus')) || null,
     cluster: r.q.has('cluster') ? Number(r.q.get('cluster')) : null,
+    region: r.q.has('region') ? Number(r.q.get('region')) : null,
     icon,
     onPlay: (ids, shuffle = false) => playReleases(ids.map((id) => lib.byId.get(id)), shuffle),
     onOpen: (id) => go(`#/album/${id}`),
     onOpenCluster: (id) => go(`#/cluster/${id}`),
+    onOpenRegion: (id) => go(`#/region/${id}`),
     onColor: (c) => history.replaceState(null, '', `#/map?color=${c}`),
   });
 }

@@ -197,6 +197,8 @@ def main() -> None:
     ap.add_argument("--limit", type=int, default=0, help="max new releases to detail this run (0 = all)")
     ap.add_argument("--refresh", type=int, default=250, help="re-fetch market stats for this many stalest releases")
     ap.add_argument("--apple", type=int, default=500, help="max Apple preview lookups this run")
+    ap.add_argument("--no-suggestions", action="store_true", help="skip Discogs price suggestions")
+    ap.add_argument("--seed", default="data/clusters.enc", help="curated clusters, decrypted with CLUSTER_KEY")
     args = ap.parse_args()
 
     token, user, password = (os.environ.get(k) for k in ("DISCOGS_TOKEN", "DISCOGS_USERNAME", "LISTENER_PASSWORD"))
@@ -204,7 +206,7 @@ def main() -> None:
         sys.exit("DISCOGS_TOKEN, DISCOGS_USERNAME and LISTENER_PASSWORD are required")
     out = Path(args.out)
 
-    cache, positions, clusters, salt = {}, {}, [], None
+    cache, positions, clusters, regions, salt = {}, {}, [], [], None
     collection_value = {}
     if out.exists():
         try:
@@ -244,6 +246,7 @@ def main() -> None:
             "user": user,
             "releases": releases,
             "clusters": clusters,
+            "regions": regions,
             "collection_value": collection_value,
             "gist_token": os.environ.get("GIST_TOKEN", ""),
         }
@@ -278,7 +281,7 @@ def main() -> None:
             print(f"  fetched {fetched}/{len(todo)}", file=sys.stderr)
             save()
     # Discogs price suggestions: per-condition values derived from the release's sales history.
-    pending = [r for r in releases if "suggest" not in r or r["id"] in refresh]
+    pending = [] if args.no_suggestions else [r for r in releases if "suggest" not in r or r["id"] in refresh]
     if args.limit:
         pending = pending[: args.limit]
     print(f"fetching price suggestions for {len(pending)} releases", file=sys.stderr)
@@ -303,12 +306,16 @@ def main() -> None:
 
     add_apple(releases, cache, args.apple)
 
+    seed = None
+    if os.environ.get("CLUSTER_KEY") and Path(args.seed).exists():
+        from seed_clusters import load_key, unseal
+        seed = unseal(Path(args.seed).read_bytes(), load_key(os.environ["CLUSTER_KEY"]))
     try:
         from collection_map import add_map
     except ImportError as e:
         print(f"skipping collection map ({e})", file=sys.stderr)
     else:
-        clusters = add_map(releases, positions)
+        clusters, regions = add_map(releases, positions, seed)
     save()
     print(f"done: {fetched} releases fetched, bundle at {out}", file=sys.stderr)
 

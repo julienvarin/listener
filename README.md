@@ -21,6 +21,12 @@ Each record's value blends recent sales with the current marketplace (`js/value.
 
 The collection total is compared against Discogs' own collection value (min / median / max).
 
+## Curated clusters
+
+The Collection Map groups records into regions and mini clusters by shared styles, eras, labels, countries, genre tags and the mood words in the Discogs notes. Names and memberships are curated once and stored encrypted in `data/clusters.enc` (key: the `CLUSTER_KEY` secret, plus a local, git-ignored `.cluster_key`). Nightly builds put new records in the closest existing cluster.
+
+To re-curate: `scripts/seed_clusters.py draft` on a local bundle, write a names file, then `scripts/seed_clusters.py seal`. Keep the draft and names files out of the repo.
+
 ## How it works
 
 A GitHub Action runs nightly. It fetches the collection from the Discogs API, computes the similarity map, then encrypts everything (AES-GCM, PBKDF2 key from the site password) into `data/library.enc` and deploys the static site to GitHub Pages. The page is public but the data is unreadable without the password.
