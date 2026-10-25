@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Listener">
+  <title>Listener</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div id="lock" class="lock" hidden>
+    <form class="lock-card" autocomplete="on">
+      <img class="lock-icon" src="icon.svg" alt="">
+      <h1>Listener</h1>
+      <p>Enter your password to open the library.</p>
+      <input type="text" name="username" value="listener" autocomplete="username" hidden>
+      <div class="lock-field">
+        <input id="lock-password" type="password" name="password" placeholder="Password" autocomplete="current-password" required>
+        <button type="submit" aria-label="Unlock"><svg viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg></button>
+      </div>
+      <label class="lock-remember"><input id="lock-remember" type="checkbox" checked> Remember this device</label>
+      <p class="lock-status" id="lock-status" aria-live="polite"></p>
+    </form>
+  </div>
+
+  <div id="app" class="app" hidden>
+    <aside class="sidebar" id="sidebar"></aside>
+    <header class="playerbar" id="playerbar"></header>
+    <main class="main" id="main" tabindex="-1"></main>
+    <aside class="queue" id="queue" hidden></aside>
+    <nav class="tabbar" id="tabbar"></nav>
+  </div>
+
+  <div id="sheet" class="sheet" hidden></div>
+  <div id="menu" class="menu" hidden></div>
+  <div id="toast" class="toast" hidden></div>
+  <div id="yt-host" aria-hidden="true"><div id="yt-player"></div></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

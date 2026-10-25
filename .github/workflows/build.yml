@@ -1,0 +1,52 @@
+name: Build and deploy
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - id: pages
+        uses: actions/configure-pages@v5
+      # The live bundle is the cache: only new records and the stalest market stats are re-fetched.
+      - name: Download previous library
+        run: curl -fsSL -o data/library.enc "${{ steps.pages.outputs.base_url }}/data/library.enc" || rm -f data/library.enc
+      - name: Fetch collection and encrypt
+        env:
+          DISCOGS_TOKEN: ${{ secrets.DISCOGS_TOKEN }}
+          DISCOGS_USERNAME: ${{ secrets.DISCOGS_USERNAME }}
+          LISTENER_PASSWORD: ${{ secrets.LISTENER_PASSWORD }}
+          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
+        run: python scripts/build_data.py --refresh ${{ github.event_name == 'schedule' && 250 || 0 }}
+      - name: Assemble site
+        run: |
+          mkdir -p _site/data
+          cp -r index.html manifest.webmanifest icon.svg icon.png css js _site/
+          cp data/library.enc _site/data/
+      - uses: actions/upload-pages-artifact@v3
+      - id: deployment
+        uses: actions/deploy-pages@v4
