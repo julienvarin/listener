@@ -565,18 +565,24 @@ function seeded(seedText) {
   };
 }
 
-function pickDaily(list, n, rand) {
+function shuffleWith(list, rand) {
   const a = list.slice();
   for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
-  return n ? a.slice(0, n) : a;
+  return a;
 }
+
+// Ranked shelves lead with a shuffled sample of their best records, so each visit shows a different mix.
+const mixTop = (list, rand, pool = 48) => shuffleWith(list.slice(0, pool), rand).concat(list.slice(pool));
+
+// One seed per app load: shelves reshuffle on every reload but stay put while browsing (See All, Shuffle).
+const LOAD_SEED = String(Math.random());
 
 const want = (r) => `${r.want.toLocaleString()} want · ${r.have.toLocaleString()} have`;
 
 // Every shelf keeps its full list so "See All" can show everything.
 function shelves() {
   const today = new Date();
-  const rand = seeded(today.toDateString());
+  const rand = seeded(LOAD_SEED);
   const rs = lib.releases;
   const stats = rs.filter((r) => r.have !== undefined);
   const byAdded = rs.slice().sort(SORTS.added[1]);
@@ -586,55 +592,55 @@ function shelves() {
   const out = [];
   const add = (key, title, list, opts = {}) => list.length && out.push({ key, title, list, ...opts });
 
-  add('rediscover', 'Rediscover', pickDaily(rs.filter((r) => r.added && r.added < sixMonths), 0, rand), {
-    sub: 'Not added in a while · reshuffled daily.',
+  add('rediscover', 'Rediscover', shuffleWith(rs.filter((r) => r.added && r.added < sixMonths), rand), {
+    sub: 'Not added in a while.',
     badge: (r) => `Added ${new Date(r.added).getFullYear()}`,
   });
-  add('onthisday', 'On This Day', rs.filter((r) => r.added && md(r.added) === todayMd && r.added.slice(0, 4) < String(today.getFullYear())).sort(SORTS.added[1]), {
+  add('onthisday', 'On This Day', shuffleWith(rs.filter((r) => r.added && md(r.added) === todayMd && r.added.slice(0, 4) < String(today.getFullYear())), rand), {
     sub: 'Added on this date in past years.',
     badge: (r) => `${today.getFullYear() - Number(r.added.slice(0, 4))} years ago`,
   });
   add('recent', 'Recently Added', byAdded);
-  add('ratio', 'Best Want / Have Ratio', stats.filter((r) => r.want >= 20 && r.want > r.have).sort(SORTS.ratio[1]), {
+  add('ratio', 'Best Want / Have Ratio', mixTop(stats.filter((r) => r.want >= 20 && r.want > r.have).sort(SORTS.ratio[1]), rand), {
     sub: 'Far more wanted than owned.',
     badge: (r) => `${want(r)} · ${r.ratio.toFixed(1)}×`,
   });
-  add('valuable', 'Most Valuable', rs.filter((r) => r.est).sort(SORTS.value[1]), {
+  add('valuable', 'Most Valuable', mixTop(rs.filter((r) => r.est).sort(SORTS.value[1]), rand), {
     sub: 'Estimated from recent sales and listings.',
     badge: (r) => `≈ ${euro(r.worth)}${r.est.trend ? ` · ${r.est.trend}` : ''}`,
   });
-  add('heating', 'Heating Up', rs.filter((r) => r.est?.trend === 'Heating up').sort((a, b) => b.est.heat - a.est.heat), {
+  add('heating', 'Heating Up', mixTop(rs.filter((r) => r.est?.trend === 'Heating up').sort((a, b) => b.est.heat - a.est.heat), rand), {
     sub: 'Listed well above recent sales.',
     badge: (r) => `≈ ${euro(r.worth)} · ${r.for_sale} for sale from ${euro(r.lowest_price)}`,
   });
-  add('notforsale', 'Nobody’s Selling', stats.filter((r) => !r.for_sale && r.want >= 10).sort(SORTS.want[1]), {
+  add('notforsale', 'Nobody’s Selling', mixTop(stats.filter((r) => !r.for_sale && r.want >= 10).sort(SORTS.want[1]), rand), {
     sub: 'Wanted, none for sale.', badge: (r) => `${r.want} want · 0 for sale`,
   });
-  add('rarest', 'Rarest', stats.filter((r) => r.have > 0).sort(SORTS.have[1]), {
+  add('rarest', 'Rarest', mixTop(stats.filter((r) => r.have > 0).sort(SORTS.have[1]), rand), {
     sub: 'Fewest owners on Discogs.', badge: (r) => `${r.have} have`,
   });
-  add('wanted', 'Most Wanted', stats.slice().sort(SORTS.want[1]), { badge: want });
+  add('wanted', 'Most Wanted', mixTop(stats.slice().sort(SORTS.want[1]), rand), { badge: want });
   const labels = [...lib.labels].filter(([n, l]) => l.length >= 6 && !/^not on label/i.test(n));
   if (labels.length) {
     const [name, list] = labels[Math.floor(rand() * labels.length)];
-    add('label', `Label Spotlight: ${name}`, pickDaily(list, 0, rand), { href: `#/label/${enc(name)}`, sub: `${list.length} records · changes daily.` });
+    add('label', `Label Spotlight: ${name}`, shuffleWith(list, rand), { href: `#/label/${enc(name)}`, sub: `${list.length} records.` });
   }
   const styles = [...lib.styles].filter(([, l]) => l.length >= 8);
   if (styles.length) {
     const [name, list] = styles[Math.floor(rand() * styles.length)];
-    add('style', `Style of the Day: ${name}`, pickDaily(list, 0, rand), { href: `#/style/${enc(name)}`, sub: `${list.length} records · changes daily.` });
+    add('style', `Style Spotlight: ${name}`, shuffleWith(list, rand), { href: `#/style/${enc(name)}`, sub: `${list.length} records.` });
   }
-  add('notes', 'From Your Notes', pickDaily(rs.filter((r) => r.notes.Notes), 0, rand), {
+  add('notes', 'From Your Notes', shuffleWith(rs.filter((r) => r.notes.Notes), rand), {
     sub: 'Records you wrote about.', badge: (r) => r.notes.Notes.split('\n')[0].slice(0, 60),
   });
-  add('toprated', 'Community Favourites', stats.filter((r) => r.votes >= 3).sort(SORTS.rating[1]), {
+  add('toprated', 'Community Favourites', mixTop(stats.filter((r) => r.votes >= 3).sort(SORTS.rating[1]), rand), {
     sub: 'Highest rated on Discogs, weighted by votes.',
     badge: (r) => `★ ${r.community_rating.toFixed(2)} · ${r.votes} votes`,
   });
   const mine = [...lib.myGenres];
   if (mine.length) {
     const [name, list] = mine[Math.floor(rand() * mine.length)];
-    add('mygenre', `Your ${name} Crate`, pickDaily(list, 0, rand), { href: `#/mygenre/${enc(name)}`, sub: 'From your genre tags · changes daily.' });
+    add('mygenre', `Your ${name} Crate`, shuffleWith(list, rand), { href: `#/mygenre/${enc(name)}`, sub: 'From your genre tags.' });
   }
   return out;
 }
