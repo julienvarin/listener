@@ -51,6 +51,10 @@ jobs:
           mkdir -p _site/data
           cp -r index.html manifest.webmanifest icon.svg icon.png css js _site/
           cp data/library.enc _site/data/
+          # Version every asset URL so browsers pick up a new deploy immediately.
+          v=${GITHUB_SHA::8}-${GITHUB_RUN_NUMBER}
+          sed -i -E "s#(from '\./[a-z]+\.js)'#\1?v=$v'#g" _site/js/*.js
+          sed -i -E "s#(src=\"js/app\.js|href=\"css/styles\.css)\"#\1?v=$v\"#g" _site/index.html
       - uses: actions/upload-pages-artifact@v3
       - id: deployment
         uses: actions/deploy-pages@v4

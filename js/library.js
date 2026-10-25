@@ -1,3 +1,7 @@
+import { estimateValue } from './value.js';
+
+export const euro = (v) => new Intl.NumberFormat(undefined, { style: 'currency', currency: 'EUR', maximumFractionDigits: v < 10 ? 2 : 0 }).format(v);
+
 export const norm = (s = '') =>
   s.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 
@@ -16,6 +20,7 @@ export class Library {
     this.gistToken = payload.gist_token || '';
     this.releases = payload.releases;
     this.clusters = payload.clusters || [];
+    this.discogsValue = payload.collection_value || {};
     this.byId = new Map();
     this.itemCache = new Map();
     for (const r of this.releases) {
@@ -47,7 +52,12 @@ export class Library {
     for (const r of this.releases) {
       r.score = r.votes ? (r.votes * r.community_rating + 10 * mean) / (r.votes + 10) : 0;
       r.ratioScore = r.have !== undefined ? r.want / (r.have + 20) : 0;
+      r.est = estimateValue(r, euro);
+      r.worth = r.est ? (r.est.ownValue ?? r.est.value) : 0;
     }
+    const valued = this.releases.filter((r) => r.est);
+    this.estimatedTotal = valued.reduce((a, r) => a + r.worth * (r.copies || 1), 0);
+    this.valuedCount = valued.length;
   }
 
   group(keysOf) {

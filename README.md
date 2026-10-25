@@ -4,10 +4,22 @@ An Apple Music–style player for my Discogs collection. Audio comes from the Yo
 
 - Browse by artist, label, genre, style, decade, format, country, and my own Discogs note fields (genre tag, condition, tag)
 - Instant search across titles, artists, labels, catalog numbers, tracks and notes (`⌘K` or `/`)
-- Listen Now: Rediscover, On This Day, Hidden Gems (want/have), Most Valuable (lowest marketplace price), Nobody's Selling, Rarest, label and style spotlights, notes
-- Collection Map: records cluster by shared artists, labels, styles and eras
+- Listen Now: Rediscover, On This Day, Best Want / Have Ratio, Most Valuable and Heating Up (estimated value), Nobody’s Selling, Rarest, daily label, style and genre-tag spotlights, notes
+- Collection Map: named islands of records sharing styles, eras, labels and genre tags
 - Playlists synced across devices through a private GitHub Gist
 - Works on the phone (add to home screen)
+
+## Estimated value
+
+Each record's value blends recent sales with the current marketplace (`js/value.js`):
+
+- **Recent sales:** Discogs price suggestions at VG+ (derived from the release's sales history).
+- **Marketplace:** the cheapest listing compared to what's normal for that many copies. A lone listing usually sits around 2× recent sales, and the cheapest of 10+ copies around 0.6×, with a €2.50 floor. The ratio is the "heat".
+- More listings make the marketplace count more. A lone overpriced copy barely moves the estimate, and a cheapest copy far below recent sales is treated as likely worn.
+- **Trends:** Heating up (even the cheapest copies sit well above normal), Cooling (copies listed below normal), Scarce (nobody selling, many want it).
+- **Your copy:** if your Discogs notes have a Media Condition, the estimate is scaled to that grade.
+
+The collection total is compared against Discogs' own collection value (min / median / max).
 
 ## How it works
 

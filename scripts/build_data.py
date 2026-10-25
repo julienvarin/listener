@@ -64,6 +64,8 @@ class Discogs:
             req = urllib.request.Request(API + path, headers=self.headers)
             try:
                 with urllib.request.urlopen(req, timeout=30) as r:
+                    if int(r.headers.get("X-Discogs-Ratelimit-Remaining", 60)) < 5:
+                        time.sleep(10)
                     return json.load(r)
             except urllib.error.HTTPError as e:
                 if e.code == 404:
@@ -143,6 +145,7 @@ def main() -> None:
     out = Path(args.out)
 
     cache, positions, clusters, salt = {}, {}, [], None
+    collection_value = {}
     if out.exists():
         try:
             blob = out.read_bytes()
@@ -181,6 +184,7 @@ def main() -> None:
             "user": user,
             "releases": releases,
             "clusters": clusters,
+            "collection_value": collection_value,
             "gist_token": os.environ.get("GIST_TOKEN", ""),
         }
         out.parent.mkdir(parents=True, exist_ok=True)
@@ -192,6 +196,8 @@ def main() -> None:
     for r in releases:
         if r["id"] in cache:
             r.update({k: cache[r["id"]][k] for k in DETAIL_KEYS})
+            if "suggest" in cache[r["id"]]:
+                r["suggest"] = cache[r["id"]]["suggest"]
         if r["id"] not in cache or r["id"] in refresh:
             todo.append(r)
     if args.limit:
@@ -200,13 +206,41 @@ def main() -> None:
 
     fetched = 0
     for r in todo:
-        release = api.get(f"/releases/{r['id']}?curr_abbr=EUR")
+        try:
+            release = api.get(f"/releases/{r['id']}?curr_abbr=EUR")
+        except RuntimeError as e:
+            print(f"  skipped {r['id']}: {e}", file=sys.stderr)
+            continue
         if release:
             r.update(details(release))
         fetched += 1
         if fetched % 100 == 0:
             print(f"  fetched {fetched}/{len(todo)}", file=sys.stderr)
             save()
+    # Discogs price suggestions: per-condition values derived from the release's sales history.
+    pending = [r for r in releases if "suggest" not in r or r["id"] in refresh]
+    if args.limit:
+        pending = pending[: args.limit]
+    print(f"fetching price suggestions for {len(pending)} releases", file=sys.stderr)
+    for n, r in enumerate(pending, 1):
+        try:
+            suggest = api.get(f"/marketplace/price_suggestions/{r['id']}")
+        except urllib.error.HTTPError:
+            suggest = {}
+        except RuntimeError as e:
+            print(f"  skipped suggestions for {r['id']}: {e}", file=sys.stderr)
+            continue
+        r["suggest"] = {k: round(v["value"], 2) for k, v in suggest.items() if isinstance(v, dict) and v.get("value")}
+        if n % 100 == 0:
+            print(f"  suggestions {n}/{len(pending)}", file=sys.stderr)
+            save()
+
+    try:
+        value = api.get(f"/users/{user}/collection/value")
+    except (RuntimeError, urllib.error.HTTPError):
+        value = {}
+    collection_value = {k: float(re.sub(r"[^\d.]", "", v)) for k, v in value.items() if isinstance(v, str) and re.search(r"\d", v)}
+
     try:
         from collection_map import add_map
     except ImportError as e:

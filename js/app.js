@@ -1,5 +1,5 @@
 import { parseBundle, deriveKey, openBundle, rememberKey, recallKey, forgetKey } from './crypto.js';
-import { Library, appleCached, fmtTime, norm } from './library.js';
+import { Library, appleCached, euro, fmtTime, norm } from './library.js';
 import { Player } from './player.js';
 import { Playlists } from './playlists.js';
 import { icon } from './icons.js';
@@ -10,7 +10,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const enc = encodeURIComponent;
 const plural = (n, word) => `${n.toLocaleString()} ${word}${n === 1 ? '' : 's'}`;
 const isMobile = () => matchMedia('(max-width: 760px)').matches;
-const euro = (v) => new Intl.NumberFormat(undefined, { style: 'currency', currency: 'EUR', maximumFractionDigits: v < 10 ? 2 : 0 }).format(v);
+const compactEuro = (v) => new Intl.NumberFormat(undefined, { style: 'currency', currency: 'EUR', notation: 'compact', maximumFractionDigits: 1 }).format(v);
 
 let lib, player, playlists;
 const lists = new Map();
@@ -246,7 +246,8 @@ const SORTS = {
   want: ['Most Wanted', (a, b) => (b.want || 0) - (a.want || 0)],
   have: ['Rarest', (a, b) => (a.have || 1e9) - (b.have || 1e9)],
   ratio: ['Want / Have', (a, b) => b.ratioScore - a.ratioScore],
-  price: ['Price', (a, b) => (b.lowest_price || 0) - (a.lowest_price || 0)],
+  value: ['Estimated Value', (a, b) => b.worth - a.worth],
+  price: ['Lowest Price', (a, b) => (b.lowest_price || 0) - (a.lowest_price || 0)],
   rating: ['Community Rating', (a, b) => b.score - a.score],
 };
 const FILTERS = [
@@ -476,6 +477,7 @@ function albumView(r) {
     ${extras.length ? `<h2 class="section-title">${tracks.length ? 'Other Videos' : 'Videos'}</h2><div class="tracks">${trackRows(extras, { numbered: false })}</div>` : ''}
     ${!tracks.length && !extras.length ? `<p class="foot-note">${r.stats_at ? 'No tracklist on Discogs for this release.' : 'Tracks for this record load with the next library build.'}</p>` : ''}
     ${statsStrip(r)}
+    ${valueCard(r)}
     <dl class="album-facts">
       ${r.labels.map((l) => `<div><dt>Label</dt><dd><a href="#/label/${enc(l.name)}">${esc(l.name)}</a> — ${esc(l.catno)}</dd></div>`).join('')}
       ${r.country ? `<div><dt>Country</dt><dd>${esc(r.country)}</dd></div>` : ''}
@@ -508,6 +510,22 @@ function statsStrip(r) {
   ];
   return `<div class="stats">${cells.map(([v, l]) => `<div><b>${v}</b><span>${l}</span></div>`).join('')}</div>
     ${r.stats_at ? `<p class="stats-note">Marketplace data from ${new Date(r.stats_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</p>` : ''}`;
+}
+
+const GRADES = [['Mint (M)', 'M'], ['Near Mint (NM or M-)', 'NM'], ['Very Good Plus (VG+)', 'VG+'], ['Very Good (VG)', 'VG'], ['Good Plus (G+)', 'G+'], ['Good (G)', 'G']];
+
+function valueCard(r) {
+  const e = r.est;
+  if (!e) return '';
+  const grades = GRADES.filter(([k]) => e.grades[k]);
+  return `<section class="value-card">
+    <div class="value-head">
+      <div><p class="kicker">Estimated value</p><b class="value-num">${euro(e.value)}</b></div>
+      <div class="value-tags">${e.trend ? `<span class="trend trend-${e.trend.split(' ')[0].toLowerCase()}">${e.trend}</span>` : ''}<span class="conf">${e.confidence} confidence</span></div>
+    </div>
+    <ul class="value-why">${e.why.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>
+    ${grades.length ? `<p class="value-grades"><span>Recent sales by condition</span>${grades.map(([k, l]) => `<em>${l}</em> ${euro(e.grades[k])}`).join(' · ')}</p>` : ''}
+  </section>`;
 }
 
 /* ---------- discover ---------- */
@@ -557,9 +575,13 @@ function shelves() {
     sub: 'Far more people want these than own them. Weighted so a handful of wants doesn’t outrank hundreds.',
     badge: (r) => `${want(r)} · ${r.ratio.toFixed(1)}×`,
   });
-  add('valuable', 'Most Valuable', stats.filter((r) => r.lowest_price).sort(SORTS.price[1]), {
-    sub: 'Ranked by the cheapest copy currently on the Discogs marketplace.',
-    badge: (r) => `from ${euro(r.lowest_price)} · ${r.for_sale} for sale`,
+  add('valuable', 'Most Valuable', rs.filter((r) => r.est).sort(SORTS.value[1]), {
+    sub: 'Estimated from recent sales and what’s for sale right now. Open a record to see how.',
+    badge: (r) => `≈ ${euro(r.worth)}${r.est.trend ? ` · ${r.est.trend}` : ''}`,
+  });
+  add('heating', 'Heating Up', rs.filter((r) => r.est?.trend === 'Heating up').sort((a, b) => b.est.heat - a.est.heat), {
+    sub: 'Even the cheapest copies for sale cost well above recent sales.',
+    badge: (r) => `≈ ${euro(r.worth)} · ${r.for_sale} for sale from ${euro(r.lowest_price)}`,
   });
   add('notforsale', 'Nobody’s Selling', stats.filter((r) => !r.for_sale && r.want >= 10).sort(SORTS.want[1]), {
     sub: 'Wanted, but no copy on the marketplace right now.', badge: (r) => `${r.want} want · 0 for sale`,
@@ -599,7 +621,10 @@ function discoverView() {
   const hello = hour < 5 ? 'Late Night Digging' : hour < 12 ? 'Good Morning' : hour < 18 ? 'Good Afternoon' : 'Good Evening';
   const all = shelves();
   const [first, ...rest] = all;
-  $('#main').innerHTML = `${header('Listen Now', { actions: false, kicker: hello })}
+  const dv = lib.discogsValue;
+  const partial = lib.valuedCount < lib.releases.length * 0.9 ? ` (from ${lib.valuedCount.toLocaleString()} of ${lib.releases.length.toLocaleString()} records valued so far)` : '';
+  const worth = lib.estimatedTotal ? `Your collection is worth about <b>${compactEuro(lib.estimatedTotal)}</b>${partial}${dv.median ? ` · Discogs says ${compactEuro(dv.minimum)}–${compactEuro(dv.maximum)}, median ${compactEuro(dv.median)}` : ''}. <a href="#/albums?sort=value">By value</a>` : '';
+  $('#main').innerHTML = `${header('Listen Now', { actions: false, kicker: hello, sub: worth })}
     ${first ? `<section class="hero-shelf">${first.list.slice(0, 5).map((r, i) => `<a class="feature ${i ? '' : 'big'}" href="#/album/${r.id}">${art(r)}<span class="feature-text"><small>${i ? '' : esc(first.title)}</small><b>${esc(r.title)}</b><span>${esc(r.artist)}</span></span><button class="card-play" data-play-album="${r.id}" aria-label="Play">${icon('play')}</button></a>`).join('')}</section>
       <div class="hero-actions"><button class="btn btn-primary" data-action="shuffle-rediscover">${icon('shuffle')}Shuffle Rediscover</button><a class="btn" href="#/list/rediscover">See All</a></div>` : ''}
     ${rest.map((sh) => shelf(sh.title, sh.list.slice(0, 16), sh.href || `#/list/${sh.key}`, sh)).join('')}`;
