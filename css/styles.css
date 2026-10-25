@@ -428,7 +428,7 @@ img { display: block; }
 .map-legend {
   position: absolute; left: 20px; bottom: 20px; display: flex; flex-direction: column; gap: 1px; padding: 8px;
   border-radius: 12px; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); box-shadow: var(--shadow);
-  max-height: 50%; overflow-y: auto;
+  max-height: 34%; overflow-y: auto; max-width: 280px;
 }
 .map-legend button { display: flex; align-items: center; gap: 8px; padding: 3px 8px; border-radius: 6px; font-size: 12.5px; text-align: left; }
 .map-legend button:hover { background: var(--fill); }
@@ -462,6 +462,28 @@ img { display: block; }
 .map-near { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
 .map-near img { width: 100%; aspect-ratio: 1; border-radius: 5px; object-fit: cover; }
 .map-near button:hover img { outline: 2px solid var(--accent); }
+.map-near { margin-top: 10px; }
+.map-card .head-actions { margin-top: 12px; }
+.map-card-label .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
+.map-card > .map-card-label:first-of-type { margin-top: 0; }
+.map-cluster-name { font-size: 19px; font-weight: 700; letter-spacing: -0.015em; margin: 2px 28px 8px 0; line-height: 1.2; }
+.map-def { margin: 3px 0; font-size: 12.5px; color: var(--text); }
+.map-def span { display: inline-block; width: 66px; color: var(--text3); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
+.map-def em { font-style: normal; color: var(--text3); }
+.map-cluster-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 12px; color: var(--accent); text-align: left; }
+.map-cluster-link i { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.map-cluster-link:hover { text-decoration: underline; }
+.map-sim { display: flex; flex-direction: column; gap: 2px; max-height: 240px; overflow-y: auto; }
+.map-sim button { display: flex; gap: 10px; align-items: center; padding: 5px; border-radius: 8px; text-align: left; }
+.map-sim button:hover { background: var(--fill); }
+.map-sim img { width: 40px; height: 40px; border-radius: 5px; object-fit: cover; flex: none; }
+.map-sim span { display: flex; flex-direction: column; min-width: 0; }
+.map-sim b, .map-sim small, .map-sim em { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.map-sim b { font-size: 13px; font-weight: 500; }
+.map-sim small { font-size: 12px; color: var(--text2); }
+.map-sim em { font-style: normal; font-size: 11.5px; color: var(--accent); }
+.map-legend button { font-size: 12px; padding: 2px 8px; }
+.map-legend button > :not(i):not(span) { overflow: hidden; }
 
 /* ---------- mobile ---------- */
 @media (max-width: 760px) {

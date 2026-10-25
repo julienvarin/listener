@@ -15,6 +15,7 @@ export class Library {
     this.user = payload.user;
     this.gistToken = payload.gist_token || '';
     this.releases = payload.releases;
+    this.clusters = payload.clusters || [];
     this.byId = new Map();
     this.itemCache = new Map();
     for (const r of this.releases) {
@@ -39,6 +40,14 @@ export class Library {
     this.decades = this.group((r) => (r.decade ? [r.decade] : []));
     this.formats = this.group((r) => r.formats);
     this.myGenres = this.group((r) => (r.myGenre ? [r.myGenre] : []));
+    this.clusterMembers = this.group((r) => (r.cluster === undefined ? [] : [r.cluster]));
+    // Vote-weighted rating: pulls ratings with few votes toward the collection average.
+    const rated = this.releases.filter((r) => r.votes);
+    const mean = rated.reduce((a, r) => a + r.community_rating * r.votes, 0) / (rated.reduce((a, r) => a + r.votes, 0) || 1);
+    for (const r of this.releases) {
+      r.score = r.votes ? (r.votes * r.community_rating + 10 * mean) / (r.votes + 10) : 0;
+      r.ratioScore = r.have !== undefined ? r.want / (r.have + 20) : 0;
+    }
   }
 
   group(keysOf) {
@@ -122,6 +131,20 @@ export class Library {
       tracks,
     };
   }
+}
+
+// Why two records sit near each other: what they share.
+export function sharedTraits(a, b) {
+  const out = [];
+  const artists = a.artists.filter((x) => b.artists.includes(x) && !/^(various|unknown artist)/i.test(x));
+  if (artists.length) out.push(`Same artist: ${artists[0]}`);
+  const labels = a.labels.map((l) => l.name).filter((x) => b.labels.some((l) => l.name === x) && !/^not on label/i.test(x));
+  if (labels.length) out.push(`Same label: ${labels[0]}`);
+  const styles = a.styles.filter((x) => b.styles.includes(x));
+  if (styles.length) out.push(styles.slice(0, 2).join(', '));
+  if (a.myGenre && a.myGenre === b.myGenre) out.push(`Your ${a.myGenre} tag`);
+  if (a.decade && a.decade === b.decade) out.push(a.decade);
+  return out;
 }
 
 // iTunes Search API: free 30s previews, used when Discogs has no usable video.

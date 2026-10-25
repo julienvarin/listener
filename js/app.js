@@ -105,6 +105,7 @@ function render() {
     map: () => mapView(r),
     mygenres: () => tilesView('My Genres', lib.myGenres, 'mygenre'),
     mygenre: () => collectionView(arg, 'My Genre', lib.myGenres.get(arg), r, false, 'added'),
+    cluster: () => clusterView(Number(arg), r),
     recent: () => browseView('Recently Added', lib.releases, r, { sort: 'added' }),
     albums: () => browseView('Albums', lib.releases, r, { sort: 'artist' }),
     artists: () => indexView('Artists', lib.artists, 'artist', true),
@@ -244,9 +245,9 @@ const SORTS = {
   label: ['Label', (a, b) => a.label.localeCompare(b.label) || a.catno.localeCompare(b.catno, undefined, { numeric: true })],
   want: ['Most Wanted', (a, b) => (b.want || 0) - (a.want || 0)],
   have: ['Rarest', (a, b) => (a.have || 1e9) - (b.have || 1e9)],
-  ratio: ['Want / Have', (a, b) => b.ratio - a.ratio],
+  ratio: ['Want / Have', (a, b) => b.ratioScore - a.ratioScore],
   price: ['Price', (a, b) => (b.lowest_price || 0) - (a.lowest_price || 0)],
-  rating: ['Community Rating', (a, b) => (b.votes >= 3 ? b.community_rating : 0) - (a.votes >= 3 ? a.community_rating : 0)],
+  rating: ['Community Rating', (a, b) => b.score - a.score],
 };
 const FILTERS = [
   ['genre', 'Genre', (r) => r.genres],
@@ -318,6 +319,24 @@ function collectionView(name, kind, releases, r, round = false, defaultSort = 'y
     ...artistsOf.map(([a]) => `<a href="#/artist/${enc(a)}">${esc(a)}</a>`),
   ].filter(Boolean).join(' · ');
   $('#main').innerHTML = `${hero}${header(name, { kicker: kind, sub, extra: (related ? `<div class="chips">${related}</div>` : '') + tb.html })}</div>${hero === '<div>' ? '' : '</div>'}<div class="grid" id="grid"></div>`;
+  mountChunks($('#grid'), viewReleases, card);
+}
+
+function clusterView(id, r) {
+  const c = lib.clusters.find((x) => x.id === id);
+  const releases = lib.clusterMembers.get(id);
+  if (!c || !releases) return emptyView('Cluster not found');
+  const tb = toolbar(releases, r.q, 'artist');
+  viewReleases = tb.filtered.slice().sort(SORTS[tb.sort][1]);
+  const pct = (items) => items.map(([k, v]) => `${esc(k)} ${Math.round(v * 100)}%`).join(', ');
+  const sub = [
+    plural(releases.length, 'album'),
+    c.styles.length && pct(c.styles.slice(0, 3)),
+    c.decades.length && `mostly ${pct(c.decades.slice(0, 1))}`,
+    c.own.length && `your tags: ${pct(c.own)}`,
+    `<a href="#/map?cluster=${id}">Show on map</a>`,
+  ].filter(Boolean).join(' · ');
+  $('#main').innerHTML = `${header(c.name, { kicker: 'Cluster', sub, extra: tb.html })}<div class="grid" id="grid"></div>`;
   mountChunks($('#grid'), viewReleases, card);
 }
 
@@ -534,12 +553,9 @@ function shelves() {
     badge: (r) => `${today.getFullYear() - Number(r.added.slice(0, 4))} years ago`,
   });
   add('recent', 'Recently Added', byAdded);
-  for (const seed of byAdded.slice(0, 3)) {
-    const sim = (seed.similar || []).map((id) => lib.byId.get(id)).filter(Boolean);
-    add(`similar-${seed.id}`, `Because You Added “${seed.title}”`, sim, { href: `#/album/${seed.id}` });
-  }
-  add('gems', 'Hidden Gems', stats.filter((r) => r.have >= 5 && r.have <= 300 && r.ratio >= 2).sort(SORTS.ratio[1]), {
-    sub: 'Far more people want these than own them.', badge: want,
+  add('ratio', 'Best Want / Have Ratio', stats.filter((r) => r.want >= 20 && r.want > r.have).sort(SORTS.ratio[1]), {
+    sub: 'Far more people want these than own them. Weighted so a handful of wants doesn’t outrank hundreds.',
+    badge: (r) => `${want(r)} · ${r.ratio.toFixed(1)}×`,
   });
   add('valuable', 'Most Valuable', stats.filter((r) => r.lowest_price).sort(SORTS.price[1]), {
     sub: 'Ranked by the cheapest copy currently on the Discogs marketplace.',
@@ -555,23 +571,24 @@ function shelves() {
   const labels = [...lib.labels].filter(([n, l]) => l.length >= 6 && !/^not on label/i.test(n));
   if (labels.length) {
     const [name, list] = labels[Math.floor(rand() * labels.length)];
-    add('label', `Label Spotlight: ${name}`, pickDaily(list, 0, rand), { href: `#/label/${enc(name)}`, sub: `${list.length} records on ${name} in your collection.` });
+    add('label', `Label Spotlight: ${name}`, pickDaily(list, 0, rand), { href: `#/label/${enc(name)}`, sub: `${list.length} records on ${name} in your collection · changes daily.` });
   }
   const styles = [...lib.styles].filter(([, l]) => l.length >= 8);
   if (styles.length) {
     const [name, list] = styles[Math.floor(rand() * styles.length)];
-    add('style', `Style of the Day: ${name}`, pickDaily(list, 0, rand), { href: `#/style/${enc(name)}` });
+    add('style', `Style of the Day: ${name}`, pickDaily(list, 0, rand), { href: `#/style/${enc(name)}`, sub: `${list.length} ${name} records · changes daily.` });
   }
   add('notes', 'From Your Notes', pickDaily(rs.filter((r) => r.notes.Notes), 0, rand), {
     sub: 'Records you wrote something about.', badge: (r) => r.notes.Notes.split('\n')[0].slice(0, 60),
   });
-  add('toprated', 'Community Favourites', stats.filter((r) => r.votes >= 5).sort(SORTS.rating[1]), {
+  add('toprated', 'Community Favourites', stats.filter((r) => r.votes >= 3).sort(SORTS.rating[1]), {
+    sub: 'Highest rated on Discogs, weighted by number of votes: 4.8★ from 40 votes beats 5★ from 2.',
     badge: (r) => `★ ${r.community_rating.toFixed(2)} · ${r.votes} votes`,
   });
   const mine = [...lib.myGenres];
   if (mine.length) {
     const [name, list] = mine[Math.floor(rand() * mine.length)];
-    add('mygenre', `Your ${name} Crate`, pickDaily(list, 0, rand), { href: `#/mygenre/${enc(name)}`, sub: 'From the genre tags in your Discogs notes.' });
+    add('mygenre', `Your ${name} Crate`, pickDaily(list, 0, rand), { href: `#/mygenre/${enc(name)}`, sub: 'From the genre tags in your Discogs notes · a different tag every day.' });
   }
   return out;
 }
@@ -607,11 +624,13 @@ function mapView(r) {
   if (!lib.releases.some((x) => x.xy)) return emptyView('The collection map is computed on the next library build.');
   main.innerHTML = `<div class="map-wrap" id="map"></div>`;
   activeMap = new CollectionMap($('#map'), lib, {
-    colorBy: r.q.get('color') || 'style',
+    colorBy: r.q.get('color') || 'cluster',
     focus: Number(r.q.get('focus')) || null,
+    cluster: r.q.has('cluster') ? Number(r.q.get('cluster')) : null,
     icon,
-    onPlay: (id) => playReleases([lib.byId.get(id)], false),
+    onPlay: (ids, shuffle = false) => playReleases(ids.map((id) => lib.byId.get(id)), shuffle),
     onOpen: (id) => go(`#/album/${id}`),
+    onOpenCluster: (id) => go(`#/cluster/${id}`),
     onColor: (c) => history.replaceState(null, '', `#/map?color=${c}`),
   });
 }

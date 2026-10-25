@@ -142,7 +142,7 @@ def main() -> None:
         sys.exit("DISCOGS_TOKEN, DISCOGS_USERNAME and LISTENER_PASSWORD are required")
     out = Path(args.out)
 
-    cache, positions, salt = {}, {}, None
+    cache, positions, clusters, salt = {}, {}, [], None
     if out.exists():
         try:
             blob = out.read_bytes()
@@ -180,6 +180,7 @@ def main() -> None:
             "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "user": user,
             "releases": releases,
+            "clusters": clusters,
             "gist_token": os.environ.get("GIST_TOKEN", ""),
         }
         out.parent.mkdir(parents=True, exist_ok=True)
@@ -211,7 +212,7 @@ def main() -> None:
     except ImportError as e:
         print(f"skipping collection map ({e})", file=sys.stderr)
     else:
-        add_map(releases, positions)
+        clusters = add_map(releases, positions)
     save()
     print(f"done: {fetched} releases fetched, bundle at {out}", file=sys.stderr)
 
