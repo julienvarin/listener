@@ -455,7 +455,7 @@ function albumView(r) {
     </section>
     <div class="tracks">${tracks.length ? trackRows(tracks) : ''}</div>
     ${extras.length ? `<h2 class="section-title">${tracks.length ? 'Other Videos' : 'Videos'}</h2><div class="tracks">${trackRows(extras, { numbered: false })}</div>` : ''}
-    ${!tracks.length && !extras.length ? '<p class="foot-note">No tracklist on Discogs for this release.</p>' : ''}
+    ${!tracks.length && !extras.length ? `<p class="foot-note">${r.stats_at ? 'No tracklist on Discogs for this release.' : 'Tracks for this record load with the next library build.'}</p>` : ''}
     ${statsStrip(r)}
     <dl class="album-facts">
       ${r.labels.map((l) => `<div><dt>Label</dt><dd><a href="#/label/${enc(l.name)}">${esc(l.name)}</a> — ${esc(l.catno)}</dd></div>`).join('')}

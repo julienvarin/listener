@@ -6,6 +6,10 @@ on:
   schedule:
     - cron: "17 4 * * *"
   workflow_dispatch:
+    inputs:
+      limit:
+        description: Max releases to fetch details for (0 = all)
+        default: "0"
 
 permissions:
   contents: read
@@ -41,7 +45,7 @@ jobs:
           DISCOGS_USERNAME: ${{ secrets.DISCOGS_USERNAME }}
           LISTENER_PASSWORD: ${{ secrets.LISTENER_PASSWORD }}
           GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
-        run: python scripts/build_data.py --refresh ${{ github.event_name == 'schedule' && 250 || 0 }}
+        run: python scripts/build_data.py --refresh ${{ github.event_name == 'schedule' && 250 || 0 }} --limit ${{ inputs.limit || 0 }}
       - name: Assemble site
         run: |
           mkdir -p _site/data
