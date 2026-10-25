@@ -182,8 +182,20 @@ export class Player extends EventTarget {
   advance() {
     if (this.pos < this.order.length - 1) { this.pos++; this.load(); }
     else if (this.repeat === 'all' && this.order.length) { this.pos = 0; this.load(); }
+    else if (this.shuffle && this.continueQueue()) this.load();
     else { this.stopAll(); this.setPlaying(false); }
     this.emit('queue');
+  }
+
+  // Shuffle with repeat off never runs dry: the app supplies another record from where playback started.
+  continueQueue() {
+    const more = this.autoplay?.() || [];
+    if (!more.length) return false;
+    const offset = this.queue.length;
+    this.queue.push(...more);
+    this.order.push(...more.map((_, i) => offset + i));
+    this.pos++;
+    return true;
   }
 
   next() { if (this.order.length) this.advance(); }

@@ -61,6 +61,7 @@ async function boot() {
 function start(payload) {
   lib = new Library(payload);
   player = new Player();
+  player.autoplay = autoplayNext;
   playlists = new Playlists();
   $('#app').hidden = false;
 
@@ -796,8 +797,30 @@ function releaseQueue(releases, { shuffle = false, cap = 600 } = {}) {
 
 function playReleases(releases, shuffle) {
   const q = releaseQueue(releases, { shuffle });
+  if (!q.length && shuffle) return playReleases(releases, false);
   if (!q.length) return toast('Nothing playable here');
-  player.play(q, 0, { shuffle });
+  startPlay(q, 0, { shuffle });
+}
+
+// Autoplay continues from where playback started: the category or list on screen, records sharing
+// a style with the album on screen, or else the whole collection.
+let autoplayPool = [];
+
+function startPlay(items, start, opts) {
+  const [r] = viewReleases;
+  autoplayPool = viewReleases.length > 1 ? viewReleases.slice()
+    : r ? lib.releases.filter((x) => x !== r && (r.styles.length ? x.styles.some((s) => r.styles.includes(s)) : x.genres.some((g) => r.genres.includes(g))))
+    : [];
+  player.play(items, start, opts);
+}
+
+function autoplayNext() {
+  const queued = new Set(player.queue.map((t) => t.rid));
+  const pick = (pool) => shuffleWith(pool, Math.random).find((r) => !queued.has(r.id) && !lib.silent(r) && lib.playable(r).length);
+  const r = pick(autoplayPool) || pick(lib.releases);
+  if (!r) return [];
+  const items = lib.playable(r);
+  return shuffleWith(items.some((t) => t.yt) ? items.filter((t) => t.yt) : items, Math.random);
 }
 
 /* ---------- player UI ---------- */
@@ -1003,7 +1026,7 @@ function bindGlobal() {
     let x;
     if ((x = el('[data-play-album]'))) {
       e.preventDefault();
-      return playReleases([lib.byId.get(Number(x.dataset.playAlbum))], false);
+      return playReleases([lib.byId.get(Number(x.dataset.playAlbum))], player.shuffle);
     }
     if ((x = el('[data-more-album]'))) {
       e.preventDefault();
@@ -1035,14 +1058,14 @@ function bindGlobal() {
     if ((x = el('[data-play-playlist]'))) {
       e.preventDefault();
       const items = playlistItems(playlists.get(x.dataset.playPlaylist));
-      return items.length && player.play(items, 0, { shuffle: x.hasAttribute('data-shuffle') });
+      return items.length && startPlay(items, 0, { shuffle: x.hasAttribute('data-shuffle') });
     }
     if ((x = el('.row')) && !el('a')) {
       const items = lists.get(x.dataset.list);
       const i = Number(x.dataset.index);
       const cur = player.current;
       if (cur && cur.rid === items[i].rid && cur.key === items[i].key) return player.toggle();
-      return player.play(items, i, { shuffle: player.shuffle });
+      return startPlay(items, i, { shuffle: player.shuffle });
     }
     if ((x = el('[data-jump]'))) return player.jump(Number(x.dataset.jump));
     if ((x = el('[data-action]'))) {
