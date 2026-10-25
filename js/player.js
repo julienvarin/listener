@@ -44,24 +44,7 @@ export class Player extends EventTarget {
       });
     }));
     setInterval(() => this.source === 'yt' && this.playing && this.emit('time'), 250);
-    // iOS pauses the YouTube video when the screen locks. A silent loop in this document keeps the
-    // page's audio session (and lock-screen controls) alive so we can resume it and keep advancing.
-    this.wanted = false;
-    this.keepalive = new Audio(silentWav());
-    this.keepalive.loop = true;
-    document.addEventListener('visibilitychange', () => this.wanted && this.nudge());
     this.mediaSession();
-  }
-
-  want(v) {
-    this.wanted = v;
-    if (v) this.keepalive.play().catch(() => {});
-    else this.keepalive.pause();
-  }
-
-  nudge() {
-    if (this.source === 'yt' && this.yt?.getPlayerState?.() !== 1) this.yt.playVideo();
-    else if (this.source === 'apple' && this.audio.paused) this.audio.play().catch(() => {});
   }
 
   emit(type) { this.dispatchEvent(new Event(type)); }
@@ -135,8 +118,7 @@ export class Player extends EventTarget {
     const item = this.current;
     const token = (this.loadToken = Symbol());
     this.stopAll();
-    if (!item) { this.want(false); return this.setPlaying(false); }
-    this.want(true);
+    if (!item) return this.setPlaying(false);
     this.loading = true;
     this.emit('track');
     this.updateMediaMetadata(item);
@@ -174,7 +156,6 @@ export class Player extends EventTarget {
   ytState(state) {
     if (this.source !== 'yt') return;
     if (state === 1) { this.loading = false; this.setPlaying(true); }
-    else if (state === 2 && this.wanted && document.hidden) setTimeout(() => this.wanted && this.nudge(), 250);
     else if (state === 2) this.setPlaying(false);
     else if (state === 0) this.ended();
   }
@@ -201,7 +182,7 @@ export class Player extends EventTarget {
   advance() {
     if (this.pos < this.order.length - 1) { this.pos++; this.load(); }
     else if (this.repeat === 'all' && this.order.length) { this.pos = 0; this.load(); }
-    else { this.stopAll(); this.want(false); this.setPlaying(false); }
+    else { this.stopAll(); this.setPlaying(false); }
     this.emit('queue');
   }
 
@@ -215,15 +196,12 @@ export class Player extends EventTarget {
   }
 
   resume() {
-    if (!this.current) return;
-    this.want(true);
     if (this.source === 'yt') this.yt.playVideo();
     else if (this.source === 'apple') this.audio.play();
-    else this.load();
+    else if (this.current) this.load();
   }
 
   pause() {
-    this.want(false);
     if (this.source === 'yt') this.yt.pauseVideo();
     else if (this.source === 'apple') this.audio.pause();
   }
@@ -264,16 +242,6 @@ export class Player extends EventTarget {
     set('previoustrack', () => this.prev());
     set('seekto', (d) => this.seek(d.seekTime));
   }
-}
-
-// One second of 8 kHz 8-bit mono silence as a WAV data URL.
-function silentWav() {
-  const n = 8000;
-  const head = [0x46464952, 36 + n, 0x45564157, 0x20746d66, 16, 0x00010001, 8000, 8000, 0x00080001, 0x61746164, n];
-  const bytes = new Uint8Array(44 + n).fill(128);
-  const view = new DataView(bytes.buffer);
-  head.forEach((v, i) => view.setUint32(i * 4, v, true));
-  return `data:audio/wav;base64,${btoa(String.fromCharCode(...bytes))}`;
 }
 
 function shuffled(arr) {
