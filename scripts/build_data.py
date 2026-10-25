@@ -25,6 +25,11 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
+try:
+    from collection_map import LAYOUT_VERSION
+except ImportError:
+    LAYOUT_VERSION = None
+
 API = "https://api.discogs.com"
 MAGIC = b"LSN1"
 ITERATIONS = 600_000
@@ -211,9 +216,11 @@ def main() -> None:
     if out.exists():
         try:
             blob = out.read_bytes()
-            previous = decrypt(blob, password)["releases"]
+            previous_payload = decrypt(blob, password)
+            previous = previous_payload["releases"]
             cache = {r["id"]: r for r in previous if "stats_at" in r}
-            positions = {r["id"]: r["xy"] for r in previous if "xy" in r}
+            if previous_payload.get("layout") == LAYOUT_VERSION:
+                positions = {r["id"]: r["xy"] for r in previous if "xy" in r}
             salt = blob[8:24]
         except Exception as e:
             print(f"previous bundle unreadable ({e}); starting fresh", file=sys.stderr)
@@ -247,6 +254,7 @@ def main() -> None:
             "releases": releases,
             "clusters": clusters,
             "regions": regions,
+            "layout": LAYOUT_VERSION,
             "collection_value": collection_value,
             "gist_token": os.environ.get("GIST_TOKEN", ""),
         }

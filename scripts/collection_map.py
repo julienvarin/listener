@@ -11,9 +11,14 @@ from collections import Counter
 
 import numpy as np
 from scipy.sparse import csr_matrix
+from scipy.spatial import cKDTree
 from sklearn.cluster import KMeans
 from sklearn.decomposition import TruncatedSVD
 from sklearn.manifold import TSNE
+
+# Layout: similarity drives positions; small pulls keep crates and regions together in one compact shape.
+LAYOUT = {"similarity": 0.9, "crate": 0.0, "region": 0.1, "perplexity": 60, "exaggeration": 4}
+LAYOUT_VERSION = 2  # bump when the layout recipe changes, so builds don't start from the old positions
 
 IGNORED_ARTISTS = {"various", "unknown artist"}
 IGNORED_LABELS = {"not on label", "white label", "none", "no label"}
@@ -152,6 +157,27 @@ def auto_name(info: dict) -> str:
     return " ".join(x for x in [mood, " & ".join(styles)] if x)
 
 
+def spread(xy: np.ndarray, iterations: int = 300) -> np.ndarray:
+    """Even out spacing so no two records sit closer than one cover width, keeping neighbours together."""
+    xy = (xy - xy.min(axis=0)) / max(np.ptp(xy, axis=0).max(), 1e-9) * 1000
+    cell = 1000 / 60
+    area = len({(int(x // cell), int(y // cell)) for x, y in xy}) * cell * cell
+    dmin = 0.85 * math.sqrt(area / len(xy))
+    for _ in range(iterations):
+        pairs = cKDTree(xy).query_pairs(dmin, output_type="ndarray")
+        if not len(pairs):
+            break
+        a, b = pairs[:, 0], pairs[:, 1]
+        delta = xy[a] - xy[b]
+        dist = np.linalg.norm(delta, axis=1)
+        delta[dist < 1e-6] = np.random.default_rng(0).normal(size=(int((dist < 1e-6).sum()), 2))
+        dist = np.linalg.norm(delta, axis=1) + 1e-6
+        push = ((dmin - dist) / 2 / dist)[:, None] * delta * 0.5
+        np.add.at(xy, a, push)
+        np.add.at(xy, b, -push)
+    return xy
+
+
 def add_map(releases: list, previous: dict, seed: dict | None = None) -> tuple:
     n = len(releases)
     x = feature_matrix(releases)
@@ -187,10 +213,17 @@ def add_map(releases: list, previous: dict, seed: dict | None = None) -> tuple:
         init = (init - init.mean(axis=0)) / init.std(axis=0)
     init = (init * 1e-4).astype(np.float32)
 
-    # Mini clusters become islands, grouped into region continents.
-    dist = 0.55 * np.clip(1 - sim, 0, 1) + 0.15 * (mini[:, None] != mini[None, :]) + 0.30 * (region[:, None] != region[None, :])
+    dist = (
+        LAYOUT["similarity"] * np.clip(1 - sim, 0, 1)
+        + LAYOUT["crate"] * (mini[:, None] != mini[None, :])
+        + LAYOUT["region"] * (region[:, None] != region[None, :])
+    )
     np.fill_diagonal(dist, 0)
-    xy = TSNE(n_components=2, metric="precomputed", init=init, perplexity=min(30, n - 1), random_state=0).fit_transform(dist)
+    xy = TSNE(
+        n_components=2, metric="precomputed", init=init, perplexity=min(LAYOUT["perplexity"], n - 1),
+        early_exaggeration=LAYOUT["exaggeration"], random_state=0,
+    ).fit_transform(dist)
+    xy = spread(xy)
     xy = (xy - xy.min(axis=0)) / max(np.ptp(xy, axis=0).max(), 1e-9) * 1000
 
     for i, r in enumerate(releases):

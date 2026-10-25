@@ -30,6 +30,7 @@ export class CollectionMap {
     this.opts = opts;
     this.nodes = lib.releases.filter((r) => r.xy).map((r) => ({ r, x: r.xy[0], y: r.xy[1] }));
     this.byId = new Map(this.nodes.map((n) => [n.r.id, n]));
+    this.measureSpacing();
     this.clusters = new Map(lib.clusters.map((c) => [c.id, c]));
     this.regions = new Map(lib.regions.map((g) => [g.id, g]));
     // Mini clusters share their region's hue, with a different shade each.
@@ -128,6 +129,30 @@ export class CollectionMap {
     this.draw();
   }
 
+  // Typical distance between neighbouring records, which sets the cover size.
+  measureSpacing() {
+    const cell = 25;
+    const grid = new Map();
+    const key = (x, y) => `${Math.floor(x / cell)},${Math.floor(y / cell)}`;
+    for (const n of this.nodes) {
+      const k = key(n.x, n.y);
+      if (!grid.has(k)) grid.set(k, []);
+      grid.get(k).push(n);
+    }
+    for (const n of this.nodes) {
+      let best = cell * 2;
+      const cx = Math.floor(n.x / cell), cy = Math.floor(n.y / cell);
+      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+        for (const m of grid.get(`${cx + dx},${cy + dy}`) || []) {
+          if (m !== n) best = Math.min(best, Math.hypot(m.x - n.x, m.y - n.y));
+        }
+      }
+      n.nn = best;
+    }
+    const sorted = this.nodes.map((n) => n.nn).sort((a, b) => a - b);
+    this.spacing = sorted[sorted.length >> 1] || 10;
+  }
+
   destroy() {
     this.resizeObserver.disconnect();
     cancelAnimationFrame(this.raf);
@@ -204,7 +229,7 @@ export class CollectionMap {
   }
 
   nodeAt(sx, sy) {
-    let best = null, bestD = (this.view.k > 3.5 ? this.size() / 1.4 : 10) ** 2;
+    let best = null, bestD = (this.size() >= 18 ? this.size() / 1.4 : 10) ** 2;
     for (const n of this.nodes) {
       const [x, y] = this.toScreen(n);
       const d = (x - sx) ** 2 + (y - sy) ** 2;
@@ -217,7 +242,10 @@ export class CollectionMap {
     return this.labelRects.find((l) => sx >= l.x && sx <= l.x + l.w && sy >= l.y && sy <= l.y + l.h) || null;
   }
 
-  size() { return Math.min(84, 5 * this.view.k); }
+  // Records are evenly spaced by the build, so one cover size per zoom level makes neighbours just touch.
+  size() { return Math.min(84, this.spacing * this.fit * this.view.k * 1.02); }
+
+  coverSize() { return this.size(); }
 
   image(n) {
     let img = this.images.get(n.r.id);
@@ -240,10 +268,10 @@ export class CollectionMap {
     const { ctx, dpr } = this;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, this.w, this.h);
-    const covers = this.view.k > 3.5;
+    const covers = this.size() >= 18;
     const size = this.size();
     const filtering = !!(this.query || this.isolate || this.cluster || this.region);
-    const pad = size + 4;
+    const pad = 90;
 
     for (const pass of filtering ? [false, true] : [true]) {
       for (const n of this.nodes) {
@@ -254,16 +282,34 @@ export class CollectionMap {
         ctx.globalAlpha = hit ? 1 : 0.1;
         const img = covers && hit ? this.image(n) : null;
         if (img) {
+          // Rounded cover with a soft shadow and hairline edge, like the album cards.
+          const s = this.coverSize(n);
+          const rad = Math.max(2, s * 0.1);
+          const left = x - s / 2, top = y - s / 2;
           ctx.save();
-          ctx.shadowColor = 'rgba(0,0,0,.18)';
-          ctx.shadowBlur = 6;
-          ctx.shadowOffsetY = 2;
-          ctx.drawImage(img, x - size / 2, y - size / 2, size, size);
+          ctx.shadowColor = 'rgba(0,0,0,.2)';
+          ctx.shadowBlur = Math.min(10, s * 0.18);
+          ctx.shadowOffsetY = Math.min(3, s * 0.05);
+          ctx.fillStyle = '#fff';
+          ctx.beginPath();
+          ctx.roundRect(left, top, s, s, rad);
+          ctx.fill();
           ctx.restore();
+          ctx.save();
+          ctx.beginPath();
+          ctx.roundRect(left, top, s, s, rad);
+          ctx.clip();
+          ctx.drawImage(img, left, top, s, s);
+          ctx.restore();
+          ctx.strokeStyle = 'rgba(0,0,0,.1)';
+          ctx.lineWidth = 0.5;
+          ctx.beginPath();
+          ctx.roundRect(left, top, s, s, rad);
+          ctx.stroke();
         } else {
           ctx.fillStyle = n.color;
           ctx.beginPath();
-          ctx.arc(x, y, covers ? size / 3 : Math.max(2.2, 1.6 + this.view.k * 0.9), 0, Math.PI * 2);
+          ctx.arc(x, y, covers ? size / 3.2 : Math.max(1.8, Math.min(size * 0.38, 2 + this.view.k * 0.6)), 0, Math.PI * 2);
           ctx.fill();
         }
       }
@@ -275,11 +321,11 @@ export class CollectionMap {
     if (focus) {
       const ring = (n, color, width) => {
         const [x, y] = this.toScreen(n);
-        const r = covers ? size / 2 + 3 : 7;
+        const r = covers ? this.coverSize(n) / 2 + 3 : 7;
         ctx.strokeStyle = color;
         ctx.lineWidth = width;
         ctx.beginPath();
-        if (covers) ctx.rect(x - r, y - r, r * 2, r * 2);
+        if (covers) ctx.roundRect(x - r, y - r, r * 2, r * 2, Math.max(3, r * 0.22));
         else ctx.arc(x, y, r, 0, Math.PI * 2);
         ctx.stroke();
       };
