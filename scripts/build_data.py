@@ -14,7 +14,9 @@ import re
 import struct
 import sys
 import time
+import unicodedata
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -129,6 +131,63 @@ def details(release: dict) -> dict:
     }
 
 
+def norm(s: str) -> str:
+    s = "".join(c for c in unicodedata.normalize("NFKD", s.lower()) if not unicodedata.combining(c))
+    return re.sub(r"[^a-z0-9]+", " ", s).strip()
+
+
+class AppleLimited(Exception):
+    pass
+
+
+def apple_preview(title: str, artist: str) -> dict | None:
+    """Mirrors applePreview() in js/library.js, so the app agrees with what the build found."""
+    title = re.sub(r"\((original|extended)? ?mix\)", "", title, flags=re.I).strip()
+    artists = [a for a in (norm(x) for x in re.split(r",|&| vs\.? | feat\.? | ft\.? | and | x ", artist, flags=re.I)) if a]
+    term = f"{artists[0] if artists else ''} {title}"
+    url = "https://itunes.apple.com/search?" + urllib.parse.urlencode({"term": term, "entity": "song", "limit": "10"})
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "listener/1.0"}), timeout=20) as r:
+            results = json.load(r).get("results", [])
+    except urllib.error.HTTPError as e:
+        if e.code in (403, 429):
+            raise AppleLimited from e
+        raise
+    words = norm(title).split(" ")
+    first = words[0] if words else ""
+    for x in results:
+        name = norm(x.get("artistName", ""))
+        if x.get("previewUrl") and any(a in name or name in a for a in artists) and first in norm(x.get("trackName", "")):
+            return {"url": x["previewUrl"], "link": x.get("trackViewUrl", "")}
+    return None
+
+
+def add_apple(releases: list, cache: dict, budget: int) -> None:
+    """Look up Apple Music previews for records with no YouTube video, so the app can gray out the silent ones."""
+    for r in releases:
+        old = cache.get(r["id"], {}).get("apple")
+        if old is not None and len(old) == len(r.get("tracks", [])):
+            r["apple"] = old
+    todo = [r for r in releases if r.get("stats_at") and not r.get("videos") and r.get("tracks") and "apple" not in r]
+    print(f"looking up Apple previews for {min(len(todo), budget)} of {len(todo)} records without videos", file=sys.stderr)
+    for r in todo:
+        if budget <= 0:
+            return
+        found = []
+        try:
+            for t in r["tracks"]:
+                time.sleep(3)  # iTunes Search allows ~20 requests a minute
+                found.append(apple_preview(t["title"] or "Untitled", ", ".join(t.get("artists") or r["artists"]) or "Unknown Artist"))
+        except AppleLimited:
+            print("  Apple rate limit hit; the rest waits for the next build", file=sys.stderr)
+            return
+        except (urllib.error.URLError, TimeoutError, ValueError) as e:
+            print(f"  skipped Apple lookup for {r['id']}: {e}", file=sys.stderr)
+            continue
+        r["apple"] = found
+        budget -= len(found)
+
+
 DETAIL_KEYS = ("country", "released", "tracks", "videos", "have", "want", "community_rating", "votes", "lowest_price", "for_sale", "stats_at")
 
 
@@ -137,6 +196,7 @@ def main() -> None:
     ap.add_argument("--out", default="data/library.enc")
     ap.add_argument("--limit", type=int, default=0, help="max new releases to detail this run (0 = all)")
     ap.add_argument("--refresh", type=int, default=250, help="re-fetch market stats for this many stalest releases")
+    ap.add_argument("--apple", type=int, default=500, help="max Apple preview lookups this run")
     args = ap.parse_args()
 
     token, user, password = (os.environ.get(k) for k in ("DISCOGS_TOKEN", "DISCOGS_USERNAME", "LISTENER_PASSWORD"))
@@ -240,6 +300,8 @@ def main() -> None:
     except (RuntimeError, urllib.error.HTTPError):
         value = {}
     collection_value = {k: float(re.sub(r"[^\d.]", "", v)) for k, v in value.items() if isinstance(v, str) and re.search(r"\d", v)}
+
+    add_apple(releases, cache, args.apple)
 
     try:
         from collection_map import add_map

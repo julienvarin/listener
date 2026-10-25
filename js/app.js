@@ -198,9 +198,10 @@ const art = (r, cls = '') => hasCover(r)
   : `<div class="${cls} art-empty">${icon('note')}</div>`;
 
 function card(r, badge = '') {
-  return `<div class="card">
+  const silent = lib.silent(r);
+  return `<div class="card${silent ? ' silent' : ''}">
     <div class="card-cover"><a class="card-art" href="#/album/${r.id}">${art(r)}</a>
-    <button class="card-play" data-play-album="${r.id}" aria-label="Play">${icon('play')}</button>
+    ${silent ? '' : `<button class="card-play" data-play-album="${r.id}" aria-label="Play">${icon('play')}</button>`}
     <button class="card-more" data-more-album="${r.id}" aria-label="More">${icon('more')}</button></div>
     <a class="card-title" href="#/album/${r.id}">${esc(r.title)}</a>
     <a class="card-sub" href="#/artist/${enc(r.artists[0] || '')}">${esc(r.artist)}</a>
@@ -360,19 +361,36 @@ function topCounts(releases, get, n) {
 
 function indexView(title, map, kind, round) {
   viewReleases = [];
-  const entries = [...map].sort((a, b) => a[0].localeCompare(b[0], undefined, { sensitivity: 'base' }));
-  $('#main').innerHTML = `${header(title, { actions: false, sub: plural(entries.length, kind) })}
-    <label class="filter-field">${icon('search')}<input id="index-filter" type="search" placeholder="Filter ${title.toLowerCase()}"></label>
+  const byName = (a, b) => a[0].localeCompare(b[0], undefined, { sensitivity: 'base' });
+  const SORT_KEY = `listener.sort.${kind}`;
+  let mode;
+  try { mode = localStorage.getItem(SORT_KEY) === 'count' ? 'count' : 'name'; } catch { mode = 'name'; }
+  $('#main').innerHTML = `${header(title, { actions: false, sub: plural(map.size, kind) })}
+    <div class="index-tools">
+      <label class="filter-field">${icon('search')}<input id="index-filter" type="search" placeholder="Filter ${title.toLowerCase()}"></label>
+      <div class="segmented" id="index-sort">${[['name', 'Name'], ['count', 'Most Records']].map(([k, l]) => `<button data-sort="${k}" class="${k === mode ? 'on' : ''}">${l}</button>`).join('')}</div>
+    </div>
     <div class="index-list" id="index"></div>`;
   const row = ([name, rs]) => {
     const lead = rs.find(hasCover) || rs[0];
     return `<a class="index-row" href="#/${kind}/${enc(name)}">${art(lead, `index-art ${round ? 'round' : ''}`)}<span class="index-name">${esc(name)}</span><span class="index-count">${rs.length}</span>${icon('chevron-right')}</a>`;
   };
-  const draw = (list) => { $('#index').innerHTML = ''; mountChunks($('#index'), list, row, 150); };
-  draw(entries);
-  $('#index-filter').addEventListener('input', (e) => {
-    const n = norm(e.target.value);
-    draw(n ? entries.filter(([name]) => norm(name).includes(n)) : entries);
+  const draw = () => {
+    const n = norm($('#index-filter').value);
+    const list = [...map].filter(([name]) => !n || norm(name).includes(n))
+      .sort(mode === 'count' ? (a, b) => b[1].length - a[1].length || byName(a, b) : byName);
+    $('#index').innerHTML = '';
+    mountChunks($('#index'), list, row, 150);
+  };
+  draw();
+  $('#index-filter').addEventListener('input', draw);
+  $('#index-sort').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-sort]');
+    if (!b || b.dataset.sort === mode) return;
+    mode = b.dataset.sort;
+    try { localStorage.setItem(SORT_KEY, mode); } catch {}
+    $('#index-sort').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+    draw();
   });
 }
 
@@ -460,6 +478,7 @@ function albumView(r) {
   const meta = [r.genres[0], r.year, fmt].filter(Boolean).map(esc).join(' · ');
   const byArtist = (lib.artists.get(r.artists[0]) || []).filter((x) => x.id !== r.id).slice(0, 12);
   const byLabel = (lib.labels.get(r.label) || []).filter((x) => x.id !== r.id && !byArtist.includes(x)).slice(0, 12);
+  const silent = lib.silent(r);
   const added = r.added ? new Date(r.added).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : '';
   $('#main').innerHTML = `
     <section class="album-hero">
@@ -469,14 +488,15 @@ function albumView(r) {
         <p class="album-artist">${r.artists.map((a) => `<a href="#/artist/${enc(a)}">${esc(a)}</a>`).join(', ') || 'Unknown Artist'}</p>
         <p class="album-meta">${meta}</p>
         <div class="head-actions">
-          <button class="btn btn-primary" data-action="play-view">${icon('play')}Play</button>
-          <button class="btn" data-action="shuffle-view">${icon('shuffle')}Shuffle</button>
+          <button class="btn btn-primary" data-action="play-view" ${silent ? 'disabled' : ''}>${icon('play')}Play</button>
+          <button class="btn" data-action="shuffle-view" ${silent ? 'disabled' : ''}>${icon('shuffle')}Shuffle</button>
           <button class="icon-btn round" data-more-album="${r.id}" aria-label="More">${icon('more')}</button>
         </div>
         <div class="chips">${r.styles.map((s) => `<a class="chip" href="#/style/${enc(s)}">${esc(s)}</a>`).join('')}${r.myGenre ? `<a class="chip mine" href="#/mygenre/${enc(r.myGenre)}">${esc(r.myGenre)}</a>` : ''}</div>
         ${r.notes.Notes ? `<p class="album-note">${esc(r.notes.Notes)}</p>` : ''}
       </div>
     </section>
+    ${silent && (tracks.length || extras.length) ? '<p class="foot-note">No YouTube video or Apple Music preview for this record.</p>' : ''}
     <div class="tracks">${tracks.length ? trackRows(tracks) : ''}</div>
     ${extras.length ? `<h2 class="section-title">${tracks.length ? 'Other Videos' : 'Videos'}</h2><div class="tracks">${trackRows(extras, { numbered: false })}</div>` : ''}
     ${!tracks.length && !extras.length ? `<p class="foot-note">${r.stats_at ? 'No tracklist on Discogs for this release.' : 'Tracks for this record load with the next library build.'}</p>` : ''}
@@ -567,54 +587,54 @@ function shelves() {
   const add = (key, title, list, opts = {}) => list.length && out.push({ key, title, list, ...opts });
 
   add('rediscover', 'Rediscover', pickDaily(rs.filter((r) => r.added && r.added < sixMonths), 0, rand), {
-    sub: 'Records you haven’t added in a while — reshuffled every day.',
+    sub: 'Not added in a while · reshuffled daily.',
     badge: (r) => `Added ${new Date(r.added).getFullYear()}`,
   });
   add('onthisday', 'On This Day', rs.filter((r) => r.added && md(r.added) === todayMd && r.added.slice(0, 4) < String(today.getFullYear())).sort(SORTS.added[1]), {
-    sub: 'Added on this date in previous years.',
+    sub: 'Added on this date in past years.',
     badge: (r) => `${today.getFullYear() - Number(r.added.slice(0, 4))} years ago`,
   });
   add('recent', 'Recently Added', byAdded);
   add('ratio', 'Best Want / Have Ratio', stats.filter((r) => r.want >= 20 && r.want > r.have).sort(SORTS.ratio[1]), {
-    sub: 'Far more people want these than own them. Weighted so a handful of wants doesn’t outrank hundreds.',
+    sub: 'Far more wanted than owned.',
     badge: (r) => `${want(r)} · ${r.ratio.toFixed(1)}×`,
   });
   add('valuable', 'Most Valuable', rs.filter((r) => r.est).sort(SORTS.value[1]), {
-    sub: 'Estimated from recent sales and what’s for sale right now. Open a record to see how.',
+    sub: 'Estimated from recent sales and listings.',
     badge: (r) => `≈ ${euro(r.worth)}${r.est.trend ? ` · ${r.est.trend}` : ''}`,
   });
   add('heating', 'Heating Up', rs.filter((r) => r.est?.trend === 'Heating up').sort((a, b) => b.est.heat - a.est.heat), {
-    sub: 'Even the cheapest copies for sale cost well above recent sales.',
+    sub: 'Listed well above recent sales.',
     badge: (r) => `≈ ${euro(r.worth)} · ${r.for_sale} for sale from ${euro(r.lowest_price)}`,
   });
   add('notforsale', 'Nobody’s Selling', stats.filter((r) => !r.for_sale && r.want >= 10).sort(SORTS.want[1]), {
-    sub: 'Wanted, but no copy on the marketplace right now.', badge: (r) => `${r.want} want · 0 for sale`,
+    sub: 'Wanted, none for sale.', badge: (r) => `${r.want} want · 0 for sale`,
   });
   add('rarest', 'Rarest', stats.filter((r) => r.have > 0).sort(SORTS.have[1]), {
-    sub: 'Fewest Discogs users own these.', badge: (r) => `${r.have} have`,
+    sub: 'Fewest owners on Discogs.', badge: (r) => `${r.have} have`,
   });
   add('wanted', 'Most Wanted', stats.slice().sort(SORTS.want[1]), { badge: want });
   const labels = [...lib.labels].filter(([n, l]) => l.length >= 6 && !/^not on label/i.test(n));
   if (labels.length) {
     const [name, list] = labels[Math.floor(rand() * labels.length)];
-    add('label', `Label Spotlight: ${name}`, pickDaily(list, 0, rand), { href: `#/label/${enc(name)}`, sub: `${list.length} records on ${name} in your collection · changes daily.` });
+    add('label', `Label Spotlight: ${name}`, pickDaily(list, 0, rand), { href: `#/label/${enc(name)}`, sub: `${list.length} records · changes daily.` });
   }
   const styles = [...lib.styles].filter(([, l]) => l.length >= 8);
   if (styles.length) {
     const [name, list] = styles[Math.floor(rand() * styles.length)];
-    add('style', `Style of the Day: ${name}`, pickDaily(list, 0, rand), { href: `#/style/${enc(name)}`, sub: `${list.length} ${name} records · changes daily.` });
+    add('style', `Style of the Day: ${name}`, pickDaily(list, 0, rand), { href: `#/style/${enc(name)}`, sub: `${list.length} records · changes daily.` });
   }
   add('notes', 'From Your Notes', pickDaily(rs.filter((r) => r.notes.Notes), 0, rand), {
-    sub: 'Records you wrote something about.', badge: (r) => r.notes.Notes.split('\n')[0].slice(0, 60),
+    sub: 'Records you wrote about.', badge: (r) => r.notes.Notes.split('\n')[0].slice(0, 60),
   });
   add('toprated', 'Community Favourites', stats.filter((r) => r.votes >= 3).sort(SORTS.rating[1]), {
-    sub: 'Highest rated on Discogs, weighted by number of votes: 4.8★ from 40 votes beats 5★ from 2.',
+    sub: 'Highest rated on Discogs, weighted by votes.',
     badge: (r) => `★ ${r.community_rating.toFixed(2)} · ${r.votes} votes`,
   });
   const mine = [...lib.myGenres];
   if (mine.length) {
     const [name, list] = mine[Math.floor(rand() * mine.length)];
-    add('mygenre', `Your ${name} Crate`, pickDaily(list, 0, rand), { href: `#/mygenre/${enc(name)}`, sub: 'From the genre tags in your Discogs notes · a different tag every day.' });
+    add('mygenre', `Your ${name} Crate`, pickDaily(list, 0, rand), { href: `#/mygenre/${enc(name)}`, sub: 'From your genre tags · changes daily.' });
   }
   return out;
 }
@@ -629,7 +649,7 @@ function discoverView() {
   const partial = lib.valuedCount < lib.releases.length * 0.9 ? ` (from ${lib.valuedCount.toLocaleString()} of ${lib.releases.length.toLocaleString()} records valued so far)` : '';
   const worth = lib.estimatedTotal ? `Your collection is worth about <b>${compactEuro(lib.estimatedTotal)}</b>${partial}${dv.median ? ` · Discogs says ${compactEuro(dv.minimum)}–${compactEuro(dv.maximum)}, median ${compactEuro(dv.median)}` : ''}. <a href="#/albums?sort=value">By value</a>` : '';
   $('#main').innerHTML = `${header('Listen Now', { actions: false, kicker: hello, sub: worth })}
-    ${first ? `<section class="hero-shelf">${first.list.slice(0, 5).map((r, i) => `<a class="feature ${i ? '' : 'big'}" href="#/album/${r.id}">${art(r)}<span class="feature-text"><small>${i ? '' : esc(first.title)}</small><b>${esc(r.title)}</b><span>${esc(r.artist)}</span></span><button class="card-play" data-play-album="${r.id}" aria-label="Play">${icon('play')}</button></a>`).join('')}</section>
+    ${first ? `<section class="hero-shelf">${first.list.slice(0, 5).map((r, i) => `<a class="feature ${i ? '' : 'big'} ${lib.silent(r) ? 'silent' : ''}" href="#/album/${r.id}">${art(r)}<span class="feature-text"><small>${i ? '' : esc(first.title)}</small><b>${esc(r.title)}</b><span>${esc(r.artist)}</span></span><button class="card-play" data-play-album="${r.id}" aria-label="Play">${icon('play')}</button></a>`).join('')}</section>
       <div class="hero-actions"><button class="btn btn-primary" data-action="shuffle-rediscover">${icon('shuffle')}Shuffle Rediscover</button><a class="btn" href="#/list/rediscover">See All</a></div>` : ''}
     ${rest.map((sh) => shelf(sh.title, sh.list.slice(0, 16), sh.href || `#/list/${sh.key}`, sh)).join('')}`;
 }

@@ -38,6 +38,10 @@ export class Library {
       ].join(' '));
       this.byId.set(r.id, r);
     }
+    // Records without artwork borrow the white label of Frankie Bones' "Just As Long As I Got You".
+    const noCover = (r) => !r.cover || r.cover.includes('spacer.gif');
+    const white = this.releases.find((r) => !noCover(r) && /just as long as i got you/.test(norm(r.title)) && r.artists.some((a) => norm(a) === 'frankie bones'));
+    if (white) for (const r of this.releases.filter(noCover)) Object.assign(r, { cover: white.cover, thumb: white.thumb || white.cover });
     this.artists = this.group((r) => r.artists);
     this.labels = this.group((r) => [...new Set(r.labels.map((l) => l.name))]);
     this.genres = this.group((r) => r.genres);
@@ -93,6 +97,7 @@ export class Library {
         artist: (tr.t.artists || r.artists).join(', ') || r.artist,
         dur: tr.t.dur || fmtTime(tr.v?.dur),
         yt: tr.v?.yt || null,
+        apple: r.apple?.[tr.i],
       })),
       extras: videos.filter((v) => !v.used).map((v) => base(`v${v.yt}`, {
         pos: '',
@@ -116,6 +121,11 @@ export class Library {
   playable(r) {
     const { tracks, extras } = this.items(r);
     return tracks.length ? tracks : extras;
+  }
+
+  // Known to have nothing to play: no YouTube video and no Apple preview on any track.
+  silent(r) {
+    return !!r.stats_at && this.playable(r).every((t) => !t.yt && appleCached(t) === null);
   }
 
   search(q, limit = 60) {
@@ -164,10 +174,11 @@ try { appleCache = JSON.parse(localStorage.getItem(APPLE_STORE) || '{}'); } catc
 
 // undefined = not looked up yet, null = no preview exists
 export function appleCached(item) {
-  return appleCache[`${item.rid}:${item.key}`];
+  return item.apple !== undefined ? item.apple : appleCache[`${item.rid}:${item.key}`];
 }
 
 export async function applePreview(item) {
+  if (item.apple !== undefined) return item.apple;
   const id = `${item.rid}:${item.key}`;
   if (id in appleCache) return appleCache[id];
   const title = item.title.replace(/\((original|extended)? ?mix\)/i, '').trim();

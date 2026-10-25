@@ -25,7 +25,7 @@ The collection total is compared against Discogs' own collection value (min / me
 
 A GitHub Action runs nightly. It fetches the collection from the Discogs API, computes the similarity map, then encrypts everything (AES-GCM, PBKDF2 key from the site password) into `data/library.enc` and deploys the static site to GitHub Pages. The page is public but the data is unreadable without the password.
 
-Each run reuses the previously deployed bundle, so it only fetches new records plus the 250 releases with the oldest marketplace stats.
+Each run reuses the previously deployed bundle, so it only fetches new records plus the 250 releases with the oldest marketplace stats. For records with no YouTube video it also looks up Apple Music previews (up to 500 lookups a run), so records with nothing to play show grayed out.
 
 ## Setup
 
