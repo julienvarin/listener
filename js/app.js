@@ -13,6 +13,7 @@ const isMobile = () => matchMedia('(max-width: 760px)').matches;
 const compactEuro = (v) => new Intl.NumberFormat(undefined, { style: 'currency', currency: 'EUR', notation: 'compact', maximumFractionDigits: 1 }).format(v);
 
 let lib, player, playlists;
+let sheetVideo = false;
 const lists = new Map();
 let listSeq = 0;
 const scrollMemory = new Map();
@@ -66,6 +67,9 @@ function start(payload) {
   player.addEventListener('track', () => { renderPlayer(); markCurrent(); renderQueue(); renderSheet(); });
   player.addEventListener('state', () => { renderPlayer(); markCurrent(); renderSheet(); });
   player.addEventListener('time', updateProgress);
+  new MutationObserver(placeVideo).observe($('#sheet'), { attributes: true, attributeFilter: ['hidden'] });
+  for (const ev of ['scroll', 'animationend']) $('#sheet').addEventListener(ev, placeVideo);
+  addEventListener('resize', placeVideo);
   player.addEventListener('queue', () => { renderPlayer(); renderQueue(); renderSheet(); });
   player.addEventListener('unavailable', () => toast('No audio found for this track — skipped'));
   playlists.addEventListener('change', () => { renderSidebar(); if (route().seg[0]?.startsWith('playlist')) render(); });
@@ -833,10 +837,13 @@ function renderSheet() {
   if (sheet.hidden) return;
   const t = player.current;
   if (!t) { sheet.hidden = true; return; }
+  const yt = player.source === 'yt';
   sheet.innerHTML = `<div class="sheet-inner">
     <button class="sheet-grabber" data-action="close-sheet" aria-label="Close"></button>
-    <a class="sheet-art" href="#/album/${t.rid}" data-action="close-sheet">${t.cover ? `<img src="${esc(t.cover)}" alt="">` : icon('note')}</a>
+    ${yt && sheetVideo ? '<div class="sheet-art" id="sheet-video"></div><p class="sheet-hint">To keep listening outside Safari, tap fullscreen in the video, then swipe home.</p>'
+      : `<a class="sheet-art" href="#/album/${t.rid}" data-action="close-sheet">${t.cover ? `<img src="${esc(t.cover)}" alt="">` : icon('note')}</a>`}
     <div class="sheet-meta"><div><h2>${esc(t.title)}</h2><p>${esc(t.artist)} — ${esc(t.album)}</p></div>
+      ${yt ? `<button class="icon-btn round ${sheetVideo ? 'on' : ''}" data-action="sheet-video" aria-label="${sheetVideo ? 'Show Artwork' : 'Show Video'}">${icon('pip')}</button>` : ''}
       <button class="icon-btn round" data-more-current aria-label="More">${icon('more')}</button></div>
     <div class="lcd-progress big"><input type="range" class="scrub" min="0" max="1000" value="0" aria-label="Seek"><div class="times"><span class="t-cur"></span><span class="sheet-src">${player.source === 'apple' ? 'Preview' : ''}</span><span class="t-dur"></span></div></div>
     <div class="sheet-controls">
@@ -849,6 +856,18 @@ function renderSheet() {
     <div class="sheet-queue"><h3>Playing Next</h3>${player.upNext.slice(0, 30).map((x, i) => `<button class="queue-row" data-jump="${i}">${x.thumb ? `<img src="${esc(x.thumb)}" alt="" loading="lazy">` : ''}<span><span>${esc(x.title)}</span><small>${esc(x.artist)}</small></span></button>`).join('') || '<p class="foot-note">Nothing queued.</p>'}</div>
   </div>`;
   updateProgress();
+  placeVideo();
+}
+
+// The YouTube iframe can't move in the DOM without reloading, so it floats over the sheet's video slot.
+// Being visible with YouTube's controls is what lets iOS hand it to Picture in Picture.
+function placeVideo() {
+  const host = $('#yt-host');
+  const slot = !$('#sheet').hidden && $('#sheet-video');
+  host.classList.toggle('shown', !!slot);
+  if (!slot) return host.removeAttribute('style');
+  const r = slot.getBoundingClientRect();
+  Object.assign(host.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
 }
 
 /* ---------- menus & dialogs ---------- */
@@ -1011,6 +1030,7 @@ function bindGlobal() {
         queue: () => { $('#queue').hidden = !$('#queue').hidden; renderQueue(); renderPlayer(); },
         sheet: () => { $('#sheet').hidden = false; renderSheet(); },
         'close-sheet': () => { $('#sheet').hidden = true; },
+        'sheet-video': () => { sheetVideo = !sheetVideo; renderSheet(); },
         'play-view': () => playReleases(viewReleases, false),
         'shuffle-rediscover': () => playReleases(shelves()[0].list, true),
         'shuffle-view': () => playReleases(viewReleases, true),

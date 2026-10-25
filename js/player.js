@@ -35,7 +35,7 @@ export class Player extends EventTarget {
       this.yt = new YT.Player('yt-player', {
         width: 200,
         height: 200,
-        playerVars: { playsinline: 1, controls: 0, disablekb: 1, rel: 0 },
+        playerVars: { playsinline: 1, controls: 1, fs: 1, disablekb: 1, rel: 0 },
         events: {
           onReady: () => { this.yt.setVolume(this.volume * 100); resolve(this.yt); },
           onStateChange: (e) => this.ytState(e.data),
