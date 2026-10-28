@@ -401,6 +401,8 @@ def main() -> None:
     print(f"fetching {len(todo)} releases ({len(todo) - len(refresh & {r['id'] for r in todo})} new)", file=sys.stderr)
 
     fetched = 0
+    started = time.monotonic()
+    elapsed = lambda: f"{(time.monotonic() - started) / 60:.1f} min"
     for r, release, err in api.get_all(todo, lambda r: f"/releases/{r['id']}?curr_abbr=EUR", args.workers):
         if isinstance(err, urllib.error.HTTPError):
             raise err
@@ -428,6 +430,7 @@ def main() -> None:
     ]
     if args.limit:
         pending = pending[: args.limit]
+    print(f"releases done in {elapsed()} ({api.limit} req/min allowed)", file=sys.stderr)
     print(f"fetching price suggestions for {len(pending)} releases", file=sys.stderr)
     for n, (r, suggest, err) in enumerate(api.get_all(pending, lambda r: f"/marketplace/price_suggestions/{r['id']}", args.workers), 1):
         if isinstance(err, RuntimeError):
@@ -439,6 +442,8 @@ def main() -> None:
         if n % 100 == 0:
             print(f"  suggestions {n}/{len(pending)}", file=sys.stderr)
             save()
+
+    print(f"releases and price suggestions done in {elapsed()}", file=sys.stderr)
 
     # Price history: one point per refresh, so the app can tell rising records from falling ones.
     fetched_ids = {r["id"] for r in todo}
