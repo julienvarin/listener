@@ -680,3 +680,5 @@ img { display: block; }
 .entity-profile a { color: var(--accent); }
 .entity-profile .more { color: var(--accent); font-weight: 600; }
 .entity-about .chips { margin-top: 16px; }
+.row-note { display: flex; align-items: center; gap: 5px; font-size: 12.5px; color: #8a5a00; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row-note .i { width: 12px; height: 12px; flex: none; }

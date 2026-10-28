@@ -5,6 +5,7 @@
 // on the device, so they follow the collection as it changes.
 
 import { moodsOf } from './mixes.js';
+import { trackNoteText } from './library.js';
 
 const DAY = 864e5;
 
@@ -19,8 +20,8 @@ export const FIELDS = [
   ['style', 'Style', 'list', (r) => r.styles],
   ['mygenre', 'My Genre Tag', 'list', (r) => (r.myGenre ? [r.myGenre] : [])],
   ['tag', 'Tag', 'list', (r) => (r.notes.Tag ? [r.notes.Tag] : [])],
-  ['mood', 'Mood (from notes)', 'list', moodsOf],
-  ['notes', 'Notes', 'text', (r) => r.notes.Notes || ''],
+  ['mood', 'Mood (from notes)', 'list', (r, t) => moodsOf(r, t)],
+  ['notes', 'Notes', 'text', (r, t) => (t ? trackNoteText(r, t) : r.notes.Notes || '')],
   ['artist', 'Artist', 'list', (r) => r.artists],
   ['label', 'Label', 'list', (r) => r.labels.map((l) => l.name)],
   ['country', 'Country', 'list', (r) => (r.country ? [r.country] : [])],
@@ -48,7 +49,8 @@ export const OPS = {
   date: [['last', 'is in the last'], ['notlast', 'is not in the last'], ['after', 'is after'], ['before', 'is before'], ['between', 'is between']],
 };
 
-const TRACK_FIELDS = new Set(['bpm', 'energy']);
+// Notes and moods are per track too: "B1 dreamy" puts only B1 in a dreamy playlist.
+const TRACK_FIELDS = new Set(['bpm', 'energy', 'mood', 'notes']);
 
 export const ORDERS = [['random', 'Random (new pick daily)'], ['slow', 'Slowest first'], ['fast', 'Fastest first'], ['calm', 'Calmest first'], ['intense', 'Most intense first'], ['added', 'Recently added'], ['year', 'Oldest first'], ['yeardesc', 'Newest first'], ['value', 'Most valuable'], ['rating', 'Highest rated'], ['want', 'Most wanted']];
 

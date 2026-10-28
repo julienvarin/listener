@@ -568,7 +568,7 @@ function trackRows(items, { list, numbered = true, covers = false, playlistId = 
         ? `<img src="${esc(t.thumb || t.cover)}" alt="" loading="lazy">`
         : `<span class="row-num">${esc(numbered ? t.pos || i + 1 : '')}</span>`}
         <span class="row-eq"><i></i><i></i><i></i></span><span class="row-playicon">${icon('play')}</span></span>
-      <span class="row-main"><span class="row-title">${esc(t.title)}</span>${covers ? `<span class="row-sub">${esc(t.artist)} — <a href="#/album/${t.rid}">${esc(t.album)}</a></span>` : t.artistDiffers ? `<span class="row-sub">${esc(t.artist)}</span>` : ''}</span>
+      <span class="row-main"><span class="row-title">${esc(t.title)}</span>${covers ? `<span class="row-sub">${esc(t.artist)} — <a href="#/album/${t.rid}">${esc(t.album)}</a></span>` : t.artistDiffers ? `<span class="row-sub">${esc(t.artist)}</span>` : ''}${t.note ? `<span class="row-note">${icon('pencil')}${esc(t.note)}</span>` : ''}</span>
       <span class="row-tags">${feel ? `<span class="row-feel" title="Tempo · energy from 0 (calmest) to 10 (most intense)">${feel}</span>` : ''}${state === 'preview' ? '<span class="badge">Preview</span>' : state === 'spotify' ? '<span class="badge">Spotify</span>' : state === 'unavailable' ? '<span class="badge muted">No audio</span>' : ''}</span>
       <span class="row-dur">${esc(t.dur || '')}</span>
       <button class="icon-btn row-more" data-more-track ${playlistId ? `data-playlist="${playlistId}"` : ''} aria-label="More">${icon('more')}</button>
@@ -611,7 +611,7 @@ function albumView(r) {
           <button class="icon-btn round" data-more-album="${r.id}" aria-label="More">${icon('more')}</button>
         </div>
         <div class="chips">${r.styles.map((s) => `<a class="chip" href="#/style/${enc(s)}">${esc(s)}</a>`).join('')}${r.myGenre ? `<a class="chip mine" href="#/mygenre/${enc(r.myGenre)}">${esc(r.myGenre)}</a>` : ''}</div>
-        ${r.notes.Notes ? `<p class="album-note">${esc(r.notes.Notes)}</p>` : ''}
+        ${r.noteParts.general ? `<p class="album-note">${esc(r.noteParts.general)}</p>` : ''}
       </div>
     </section>
     ${silent && (tracks.length || extras.length) ? '<p class="foot-note">No YouTube video, Apple Music preview or Spotify track for this record.</p>' : ''}

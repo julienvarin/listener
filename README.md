@@ -11,11 +11,17 @@ An Apple Music–style player for my Discogs collection. Audio comes from the Yo
 - Playlists synced across devices through a private GitHub Gist
 - Works on the phone (add to home screen)
 
+## Track notes
+
+The Discogs Notes field can describe the whole record or single tracks: start a part with the track position. `B1 deep roller` is about B1, `A1-B2 dreamy` about A1 and B2, `A1 banger B1 hit` gives each its own note (A2 gets none), and anything before the first position is about the whole record. Only positions on the record's tracklist count; bare letters or numbers (`A`, `2`) count at the start, after punctuation or before a colon or dash, so "the A side" mid-sentence stays prose.
+
+Track notes show under the track on the album page. Mood and Notes rules in smart playlists, and the mood mixes, take only the tracks a note is about, and the Your Highlights mix collects the tracks you singled out.
+
 ## Artist and label pages
 
 Each artist and label page has stats from your collection (records you own, release years, where they were pressed, formats, styles, estimated value, most valuable and rarest record, labels or artists you have with them) and their Discogs profile (`scripts/entities.py`): description, real name, members, aliases, parent label and sublabels, where a label is based, links, photo or logo, number of releases on Discogs and years active.
 
-Profiles cost 2–6 Discogs requests each and are kept for 180 days. Builds fetch the artists and labels covering the most records first: nightly within 900 requests (about 15 minutes), or all missing ones with the manual run's `entities` input.
+Profiles cost 2–6 Discogs requests each and are kept for 180 days. Builds fetch the artists and labels covering the most records first: nightly within 900 requests (about 15 minutes), or with the manual run's `entities` input. Set `batches` too (e.g. entities 1500, batches 5) to fetch in back-to-back runs that each deploy what they fetched, so a cancelled or failed run loses at most one batch.
 
 ## BPM and energy
 

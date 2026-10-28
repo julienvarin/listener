@@ -18,14 +18,17 @@ const MOODS = {
   indus: 'industrial', dancefloor: 'dancefloor', beatless: 'beatless', mental: 'mental',
 };
 
+import { trackNoteText } from './library.js';
+
 const MIN = 8;
 const TRACKS = 30;
 const cap = (s) => s.replace(/(^|\s)\S/g, (c) => c.toUpperCase());
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 const decadeName = (d) => `${d.slice(2)}`;
 
-export function moodsOf(r) {
-  const words = (r.notes.Notes || '').toLowerCase().match(/[a-z][a-z-]+/g) || [];
+// Moods in a record's notes, or with a track, in what the notes say about that track and the whole record.
+export function moodsOf(r, t = null) {
+  const words = (t ? trackNoteText(r, t) : r.notes.Notes || '').toLowerCase().match(/[a-z][a-z-]+/g) || [];
   return [...new Set(words.filter((w) => MOODS[w]).map((w) => MOODS[w]))];
 }
 
@@ -58,9 +61,12 @@ function recipes(lib) {
   const rs = lib.releases.filter((r) => !lib.silent(r));
   const out = {};
   const moods = groupBy(rs, moodsOf);
-  out.mood = big(moods).map(([m, list]) => ({ id: `mood-${slug(m)}`, tags: [m], name: `${cap(m)} Moods`, sub: `Records your notes call ${m}.`, list }));
+  // Mood mixes take the tracks the mood is about: all of a record's tracks for a note on the whole record,
+  // only the named ones for "B1 dreamy".
+  const moodPick = (m) => (t, r) => moodsOf(r, t).includes(m);
+  out.mood = big(moods).map(([m, list]) => ({ id: `mood-${slug(m)}`, tags: [m], name: `${cap(m)} Moods`, sub: `Tracks your notes call ${m}.`, list, pick: moodPick(m) }));
   out.moodStyle = big(groupBy(rs, (r) => moodsOf(r).flatMap((m) => r.styles.map((s) => `${m}|${s}`))))
-    .map(([k, list]) => { const [m, s] = k.split('|'); return { id: `ms-${slug(k)}`, tags: [m, s], name: `${cap(m)} ${s}`, sub: `${s} your notes call ${m}.`, list }; });
+    .map(([k, list]) => { const [m, s] = k.split('|'); return { id: `ms-${slug(k)}`, tags: [m, s], name: `${cap(m)} ${s}`, sub: `${s} your notes call ${m}.`, list, pick: moodPick(m) }; });
   out.countryDecade = big(groupBy(rs, (r) => (r.country && r.decade ? [`${r.country}|${r.decade}`] : [])))
     .map(([k, list]) => { const [c, d] = k.split('|'); return { id: `cd-${slug(k)}`, tags: [c, d], name: `${c} in the ${decadeName(d)}`, sub: `Pressed in ${c}, ${d}.`, list }; });
   out.styleDecade = big(groupBy(rs, (r) => (r.decade ? r.styles.map((s) => `${s}|${r.decade}`) : [])))
@@ -74,6 +80,8 @@ function recipes(lib) {
     .map(({ c, list }) => ({ id: `cl-${c.id}`, name: c.name, sub: 'A corner of your Collection Map.', list }));
   out.label = big(groupBy(rs, (r) => [...new Set(r.labels.map((l) => l.name))].filter((n) => !/^(not on label|white label|none|no label)/i.test(n))))
     .map(([l, list]) => ({ id: `lb-${slug(l)}`, name: `${l} Selects`, sub: `Records on ${l}.`, list }));
+  const noted = rs.filter((r) => r.noteParts.tracks.some(Boolean));
+  if (noted.length >= MIN) out.highlights = [{ id: 'highlights', name: 'Your Highlights', sub: 'Tracks you singled out in your notes.', list: noted, pick: (t) => !!t.note }];
   const gems = rs.filter((r) => r.have !== undefined && r.have <= 150 && r.want > r.have);
   if (gems.length >= MIN) out.gems = [{ id: 'gems', name: 'Hidden Gems', sub: 'Few own them, more want them.', list: gems }];
   const old = rs.filter((r) => r.added && Date.now() - Date.parse(r.added) > 2 * 365 * 864e5);
@@ -81,10 +89,12 @@ function recipes(lib) {
   return out;
 }
 
-function tracksFor(lib, list, rand) {
+function tracksFor(lib, list, rand, pick) {
   const out = [];
   for (const r of shuffle(list, rand)) {
-    const items = lib.playable(r);
+    const all = lib.playable(r);
+    const items = pick ? all.filter((t) => pick(t, r)) : all;
+    if (!items.length) continue;
     const yt = items.filter((t) => t.yt);
     out.push(...shuffle(yt.length ? yt : items, rand).slice(0, list.length >= TRACKS ? 1 : 2));
     if (out.length >= TRACKS) break;
@@ -119,7 +129,7 @@ export function mixes(lib, turn = 0, count = 10) {
       }
     }
   }
-  const list = picked.map((m) => ({ ...m, items: tracksFor(lib, m.list, rand) })).filter((m) => m.items.length >= 5);
+  const list = picked.map((m) => ({ ...m, items: tracksFor(lib, m.list, rand, m.pick) })).filter((m) => m.items.length >= 5);
   cache = { seed, lib, list };
   return list;
 }

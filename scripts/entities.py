@@ -12,6 +12,7 @@ request budget per build, so the build stays within Discogs' 60 requests a minut
 
 import re
 import sys
+import time
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 
@@ -127,8 +128,9 @@ def fetch_label(api, lid: int, known: dict) -> tuple[dict, int]:
     }, calls
 
 
-def add_entities(api, releases: list, previous: dict, budget: int) -> dict:
-    """Returns {"a<id>": artist, "l<id>": label}, reusing previous profiles younger than MAX_AGE days."""
+def add_entities(api, releases: list, previous: dict, budget: int) -> tuple[dict, int]:
+    """Returns ({"a<id>": artist, "l<id>": label}, profiles still to fetch), reusing previous profiles younger
+    than MAX_AGE days."""
     today = datetime.now(timezone.utc).date()
     stale_before = (today - timedelta(days=MAX_AGE)).isoformat()
     counts = Counter()
@@ -147,9 +149,10 @@ def add_entities(api, releases: list, previous: dict, budget: int) -> dict:
     out = {k: v for k, v in previous.items() if k in counts}
     todo = [k for k, _ in counts.most_common() if out.get(k, {}).get("at", "") < stale_before]
     if not budget or not todo:
-        return out
+        return out, len(todo)
     print(f"fetching artist and label profiles: {len(todo)} to do, budget {budget} requests", file=sys.stderr)
     spent, done = 0, 0
+    started = time.monotonic()
     for key in todo:
         if spent >= budget:
             break
@@ -163,5 +166,8 @@ def add_entities(api, releases: list, previous: dict, budget: int) -> dict:
         out[key] = info
         spent += calls
         done += 1
+        if done % 100 == 0:
+            mins = (time.monotonic() - started) / 60
+            print(f"  {done} profiles, {spent} requests in {mins:.1f} min ({spent / max(mins, 0.01):.0f} req/min)", file=sys.stderr)
     print(f"  {done} profiles fetched with {spent} requests, {len(todo) - done} left", file=sys.stderr)
-    return out
+    return out, len(todo) - done

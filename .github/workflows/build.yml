@@ -10,6 +10,9 @@ on:
       limit:
         description: Max releases to fetch details for (0 = all)
         default: "0"
+      batches:
+        description: Run this many builds back to back while artist and label profiles are left (use with a number in entities)
+        default: "1"
       entities:
         description: Discogs requests for artist and label profiles ("all" = every missing profile, empty = none)
         default: ""
@@ -22,6 +25,7 @@ on:
 
 permissions:
   contents: read
+  actions: write  # a batched manual run starts the next batch
   pages: write
   id-token: write
 
@@ -50,6 +54,7 @@ jobs:
       - name: Download previous library
         run: curl -fsSL -o data/library.enc "${{ steps.pages.outputs.base_url }}/data/library.enc" || rm -f data/library.enc
       - name: Fetch collection and encrypt
+        id: build
         env:
           DISCOGS_TOKEN: ${{ secrets.DISCOGS_TOKEN }}
           DISCOGS_USERNAME: ${{ secrets.DISCOGS_USERNAME }}
@@ -72,3 +77,9 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
       - id: deployment
         uses: actions/deploy-pages@v4
+      # Batched profile fetching: each batch deploys what it fetched, then starts the next one.
+      - name: Start next batch
+        if: github.event_name == 'workflow_dispatch' && fromJSON(inputs.batches || '1') > 1 && steps.build.outputs.entities_left != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run build.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME" -f entities="${{ inputs.entities }}" -f batches="$(( ${{ inputs.batches }} - 1 ))"

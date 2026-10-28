@@ -32,6 +32,7 @@ export class Library {
       r.decade = r.year ? `${Math.floor(r.year / 10) * 10}s` : '';
       r.notes ||= {};
       r.myGenre = r.notes.Genre || '';
+      r.noteParts = parseNotes(r.notes.Notes || '', (r.tracks || []).map((t) => t.pos));
       r.ratio = r.have ? r.want / r.have : 0;
       r.hay = norm([
         r.title, r.artist, ...r.labels.map((l) => `${l.name} ${l.catno}`),
@@ -123,6 +124,7 @@ export class Library {
         dur: tr.t.dur || fmtTime(tr.v?.dur),
         yt: tr.v?.yt || null,
         apple: r.apple?.[tr.i],
+        note: r.noteParts.tracks[tr.i] || '',
         bpm: r.audio?.[tr.i]?.[0] ?? null,
         energy: r.audio?.[tr.i] ? this.energy(r.audio[tr.i]) : null,
         spotify: r.spotify?.[tr.i] || null,
@@ -180,6 +182,49 @@ export class Library {
     };
   }
 }
+
+// Notes can be about the whole record or about tracks, by starting a part with the track position:
+// "B1 deep roller", "A1-B2 dreamy" (A1 and B2), "A1 banger B1 hit", "great label. A2 the one". Only positions on
+// the record's own tracklist count. Bare capital letters or numbers ("A", "2") count at the start of the notes
+// or a line, after punctuation, or before a colon or dash, so "the A side" or "x 2" mid-sentence stays prose. Returns { general, tracks: [note per track index] }.
+const POS = /[A-Za-z]{1,2}\d{1,2}[a-z]?|[A-Z]{1,2}|\d{1,2}/.source;
+const GROUP = new RegExp(`(?<![\\w-])((?:${POS})(?:\\s*[-–/+&]\\s*(?:${POS}))*)(?![\\w])`, 'g');
+
+export function parseNotes(text, positions) {
+  const index = new Map();
+  positions.forEach((p, i) => {
+    const k = String(p || '').trim();
+    if (!k) return;
+    if (!index.has(k)) index.set(k, []);
+    index.get(k).push(i);
+  });
+  const lookup = (tok) => index.get(tok) || (/\d/.test(tok) && /[a-z]/i.test(tok) ? index.get(tok.toUpperCase()) : null);
+  const groups = [];
+  if (index.size) {
+    for (const m of text.matchAll(GROUP)) {
+      const toks = m[1].split(/\s*[-–/+&]\s*/);
+      const hits = toks.map(lookup);
+      if (hits.some((h) => !h)) continue;
+      // Bare letters or numbers count at the start, after punctuation, joined ("A-B dub") or before a colon or dash.
+      const loose = toks.every((t) => !(/\d/.test(t) && /[a-z]/i.test(t)));
+      const before = text.slice(0, m.index).replace(/[ \t]+$/, '');
+      const opens = !before || /[,;.:!?\n(]$/.test(before);
+      if (loose && toks.length === 1 && !opens && !/^\s*[:\-–—]/.test(text.slice(m.index + m[1].length))) continue;
+      if (/\b(side|disc|cd|part|vol|no|track)\.?\s*$/i.test(text.slice(0, m.index))) continue;
+      groups.push({ start: m.index, end: m.index + m[1].length, tracks: hits.flat() });
+    }
+  }
+  const clean = (s) => s.replace(/^[\s:,;.\-–—]+|[\s,;.]+$/g, '').trim();
+  const tracks = [];
+  groups.forEach((g, i) => {
+    const part = clean(text.slice(g.end, groups[i + 1]?.start ?? text.length));
+    if (part) for (const t of g.tracks) tracks[t] = tracks[t] ? `${tracks[t]} · ${part}` : part;
+  });
+  return { general: clean(groups.length ? text.slice(0, groups[0].start) : text), tracks };
+}
+
+// A track's notes: what the record's notes say about it, plus what they say about the whole record.
+export const trackNoteText = (r, t) => [r.noteParts?.general, t?.note].filter(Boolean).join(' ');
 
 // Energy 0–10 from a track's measurements ([bpm, loudness dB, onset strength, brightness], see
 // scripts/audio_features.py): the average of where its loudness, rhythmic busyness and brightness rank in the

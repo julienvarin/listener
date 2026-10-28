@@ -463,7 +463,10 @@ def main() -> None:
     collection_value = {k: float(re.sub(r"[^\d.]", "", v)) for k, v in value.items() if isinstance(v, str) and re.search(r"\d", v)}
 
     from entities import add_entities
-    entities = add_entities(api, releases, entities, args.entities)
+    entities, left = add_entities(api, releases, entities, args.entities)
+    if os.environ.get("GITHUB_OUTPUT"):  # lets a batched manual run decide whether to start the next batch
+        with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+            f.write(f"entities_left={left}\n")
     print(f"artist and label profiles done in {elapsed()}", file=sys.stderr)
 
     add_apple(releases, cache, args.apple)
