@@ -319,6 +319,7 @@ function browseView(title, base, r, { sort: defaultSort }) {
 
 function collectionView(name, kind, releases, r, round = false, defaultSort = 'year') {
   if (!releases) return emptyView(`${kind} not found`);
+  if (kind === 'Artist' || kind === 'Label') return entityView(name, kind, releases, r, round, defaultSort);
   const skip = { Genre: ['genre'], Style: ['style'], Decade: ['decade'], 'My Genre': ['mygenre'] }[kind] || [];
   const tb = toolbar(releases, r.q, defaultSort, skip);
   viewReleases = tb.filtered.slice().sort(SORTS[tb.sort][1]);
@@ -336,6 +337,94 @@ function collectionView(name, kind, releases, r, round = false, defaultSort = 'y
     ...artistsOf.map(([a]) => `<a href="#/artist/${enc(a)}">${esc(a)}</a>`),
   ].filter(Boolean).join(' · ');
   $('#main').innerHTML = `${hero}${header(name, { kicker: kind, sub, extra: (related ? `<div class="chips">${related}</div>` : '') + tb.html })}</div>${hero === '<div>' ? '' : '</div>'}<div class="grid" id="grid"></div>`;
+  mountChunks($('#grid'), viewReleases, card);
+}
+
+// Discogs profile markup: [a=Artist], [l=Label], [url=…]text[/url], [b]…[/b], [r123] and friends.
+function discogsMarkup(text) {
+  const link = (kind, map, n) => {
+    const name = n.replace(/ \(\d+\)$/, '');
+    return map.has(name) ? `<a href="#/${kind}/${enc(name)}">${esc(name)}</a>` : esc(name);
+  };
+  return esc(text)
+    .replace(/\[a=([^\]]+)\]/g, (_, n) => link('artist', lib.artists, n))
+    .replace(/\[l=([^\]]+)\]/g, (_, n) => link('label', lib.labels, n))
+    .replace(/\[url=(https?:[^\]\s]+)\]([\s\S]*?)\[\/url\]/gi, (_, u, t) => `<a href="${u}" target="_blank" rel="noopener">${t || u}</a>`)
+    .replace(/\[(r|m)=?(\d+)\]/g, (_, k, id) => `<a href="https://www.discogs.com/${k === 'r' ? 'release' : 'master'}/${id}" target="_blank" rel="noopener">${k === 'r' ? 'release' : 'master'} ↗</a>`)
+    .replace(/\[[al]=?\d+\]/g, '')
+    .replace(/\[(\/?)(b|i|u)\]/gi, (_, c, t) => `<${c}${t.toLowerCase() === 'u' ? 'b' : t.toLowerCase()}>`)
+    .replace(/\[\/?[a-z]+[^\]]*\]/gi, '')
+    .replace(/\n/g, '<br>');
+}
+
+const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u; } };
+const pct = (n, total) => `${Math.round((n / total) * 100)}%`;
+
+function entityView(name, kind, releases, r, round, defaultSort) {
+  const tb = toolbar(releases, r.q, defaultSort);
+  viewReleases = tb.filtered.slice().sort(SORTS[tb.sort][1]);
+  const isArtist = kind === 'Artist';
+  const e = lib.entity(isArtist ? 'a' : 'l', name);
+  const lead = releases.find(hasCover);
+  const picture = e?.image
+    ? `<img class="entity-art ${round ? 'round' : ''}" src="${esc(e.image)}" alt="" loading="lazy">`
+    : lead ? art(lead, `entity-art ${round ? 'round' : ''}`) : `<div class="entity-art art-empty ${round ? 'round' : ''}">${icon('note')}</div>`;
+  const inMine = (map, n) => (map.has(n) ? `<a href="#/${map === lib.artists ? 'artist' : 'label'}/${enc(n)}">${esc(n)}</a>` : esc(n));
+  const names = (list, map) => list.map((n) => inMine(map, n.replace(/ \(\d+\)$/, ''))).join(', ');
+
+  // What the collection says.
+  const copies = releases.reduce((a, x) => a + (x.copies || 1), 0);
+  const worth = releases.reduce((a, x) => a + x.worth * (x.copies || 1), 0);
+  const top = releases.filter((x) => x.est).sort((a, b) => b.worth - a.worth)[0];
+  const rarest = releases.filter((x) => x.have > 0).sort((a, b) => a.have - b.have)[0];
+  const countries = topCounts(releases, (x) => (x.country ? [x.country] : []), 3);
+  const formats = topCounts(releases, (x) => x.formats, 3);
+  const styles = topCounts(releases, (x) => x.styles, 10);
+  const partners = isArtist ? topCounts(releases, (x) => [...new Set(x.labels.map((l) => l.name))], 12) : topCounts(releases, (x) => x.artists, 12);
+  const since = releases.map((x) => x.added).filter(Boolean).sort()[0];
+  const discogsYears = e?.years?.length ? `${e.approx ? 'c. ' : ''}${e.years[0] === e.years[1] ? e.years[0] : `${e.years[0]}–${e.years[1]}`}` : '';
+
+  const sub = [
+    discogsYears && `Active ${discogsYears}`,
+    e?.location && esc(e.location),
+    e?.realname && e.realname !== name && `Real name ${esc(e.realname)}`,
+    e?.parent && `Part of ${inMine(lib.labels, e.parent.replace(/ \(\d+\)$/, ''))}`,
+  ].filter(Boolean).join(' · ') || `${plural(releases.length, 'record')} · ${yearsSpan(releases)}`;
+
+  const stats = [
+    [copies.toLocaleString(), copies === 1 ? 'Record you own' : 'Records you own'],
+    [yearsSpan(releases) || '–', 'Release years you own'],
+    [e?.total ? e.total.toLocaleString() : '–', e ? (isArtist ? 'Releases & appearances on Discogs' : 'Releases on Discogs') : 'On Discogs (next build)'],
+    [worth ? euro(worth) : '–', 'Est. value of yours'],
+  ];
+  const facts = [
+    e?.members?.length && ['Members', names(e.members, lib.artists)],
+    e?.groups?.length && ['Member of', names(e.groups, lib.artists)],
+    e?.aliases?.length && ['Also known as', names(e.aliases, lib.artists)],
+    e?.sublabels?.length && ['Sublabels', names(e.sublabels, lib.labels)],
+    countries.length && ['Pressed in', countries.map(([c, n]) => `${esc(c)} ${pct(n, releases.length)}`).join(' · ')],
+    formats.length && ['Formats', formats.map(([f, n]) => `${esc(f)} ${n}`).join(' · ')],
+    top && ['Most valuable', `<a href="#/album/${top.id}">${esc(top.title)}</a> · ≈ ${euro(top.worth)}`],
+    rarest && ['Rarest', `<a href="#/album/${rarest.id}">${esc(rarest.title)}</a> · ${rarest.have} have`],
+    since && ['Collecting since', new Date(since).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })],
+    e?.urls?.length && ['Links', e.urls.map((u) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(host(u))} ↗</a>`).join(' · ')],
+    ['Discogs', `<a href="https://www.discogs.com/${isArtist ? 'artist' : 'label'}/${e?.id || ''}" target="_blank" rel="noopener">View ${kind.toLowerCase()} ↗</a>`],
+  ].filter(Boolean).filter((f) => f[0] !== 'Discogs' || e);
+
+  $('#main').innerHTML = `
+    <div class="entity-hero">${picture}<div>${header(name, { kicker: kind, sub })}</div></div>
+    <section class="entity-about">
+      <div class="stats">${stats.map(([v, l]) => `<div><b>${v}</b><span>${l}</span></div>`).join('')}</div>
+      ${e?.profile ? `<details class="entity-profile" ${e.profile.length < 420 ? 'open' : ''}><summary>${discogsMarkup(e.profile.slice(0, 420).replace(/\[[^\]]*$/, ''))}${e.profile.length > 420 ? '… <span class="more">More</span>' : ''}</summary><div>${discogsMarkup(e.profile)}</div></details>` : ''}
+      ${!e ? `<p class="foot-note">The Discogs profile for this ${kind.toLowerCase()} loads with an upcoming library build.</p>` : ''}
+      ${styles.length ? `<div class="chips">${styles.map(([st, n]) => `<a class="chip" href="#/style/${enc(st)}">${esc(st)} <span>${n}</span></a>`).join('')}</div>` : ''}
+      <dl class="album-facts">${facts.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>
+      ${partners.length > 1 || (partners.length && !isArtist) ? `<h2 class="section-title">${isArtist ? 'Labels' : 'Artists'} in Your Collection</h2>
+        <div class="chips">${partners.map(([n, c]) => `<a class="chip" href="#/${isArtist ? 'label' : 'artist'}/${enc(n)}">${esc(n)} <span>${c}</span></a>`).join('')}</div>` : ''}
+    </section>
+    <h2 class="section-title">Your Records</h2>
+    ${tb.html}
+    <div class="grid" id="grid"></div>`;
   mountChunks($('#grid'), viewReleases, card);
 }
 

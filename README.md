@@ -11,6 +11,12 @@ An Apple Music–style player for my Discogs collection. Audio comes from the Yo
 - Playlists synced across devices through a private GitHub Gist
 - Works on the phone (add to home screen)
 
+## Artist and label pages
+
+Each artist and label page has stats from your collection (records you own, release years, where they were pressed, formats, styles, estimated value, most valuable and rarest record, labels or artists you have with them) and their Discogs profile (`scripts/entities.py`): description, real name, members, aliases, parent label and sublabels, where a label is based, links, photo or logo, number of releases on Discogs and years active.
+
+Profiles cost 2–6 Discogs requests each and are kept for 180 days. Builds fetch the artists and labels covering the most records first: nightly within 900 requests (about 15 minutes), or all missing ones with the manual run's `entities` input.
+
 ## BPM and energy
 
 Each track's tempo and energy are measured on its 30-second preview (`scripts/audio_features.py`): found on Deezer (free API, no key), or the Apple preview when Deezer doesn't have it, decoded with ffmpeg and analyzed with librosa. Spotify no longer offers its audio features to apps.

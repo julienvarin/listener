@@ -10,6 +10,9 @@ on:
       limit:
         description: Max releases to fetch details for (0 = all)
         default: "0"
+      entities:
+        description: Discogs requests for artist and label profiles ("all" = every missing profile, empty = none)
+        default: ""
       audio:
         description: Measure BPM and energy for up to this many tracks ("all" = every track not measured yet, empty = none)
         default: ""
@@ -29,7 +32,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 150
+    timeout-minutes: 330
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -56,7 +59,7 @@ jobs:
           SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
           SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
         # Slow lookups (market refresh, Apple previews) only run nightly so pushes deploy in minutes.
-        run: python scripts/build_data.py --refresh ${{ inputs.refresh == 'all' && 1000000 || inputs.refresh || (github.event_name == 'schedule' && 500 || 0) }} --apple ${{ github.event_name == 'schedule' && 500 || 0 }} --spotify ${{ github.event_name != 'push' && 1500 || 0 }} --audio ${{ inputs.audio == 'all' && 1000000 || inputs.audio || (github.event_name == 'schedule' && 3000 || 0) }} --limit ${{ inputs.limit || 0 }}
+        run: python scripts/build_data.py --refresh ${{ inputs.refresh == 'all' && 1000000 || inputs.refresh || (github.event_name == 'schedule' && 500 || 0) }} --apple ${{ github.event_name == 'schedule' && 500 || 0 }} --spotify ${{ github.event_name != 'push' && 1500 || 0 }} --entities ${{ inputs.entities == 'all' && 1000000 || inputs.entities || (github.event_name == 'schedule' && 900 || 0) }} --audio ${{ inputs.audio == 'all' && 1000000 || inputs.audio || (github.event_name == 'schedule' && 3000 || 0) }} --limit ${{ inputs.limit || 0 }}
       - name: Assemble site
         run: |
           mkdir -p _site/data

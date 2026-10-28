@@ -138,7 +138,8 @@ def summarize(basic: dict) -> dict:
         "master": basic.get("master_id") or None,
         "title": basic["title"],
         "artists": names(basic.get("artists")),
-        "labels": [{"name": re.sub(r" \(\d+\)$", "", l["name"]), "catno": l.get("catno", "")} for l in basic.get("labels") or []],
+        "artist_ids": [a.get("id") for a in basic.get("artists") or []],
+        "labels": [{"name": re.sub(r" \(\d+\)$", "", l["name"]), "catno": l.get("catno", ""), "id": l.get("id")} for l in basic.get("labels") or []],
         "year": basic.get("year") or None,
         "formats": sorted({f["name"] for f in basic.get("formats") or []}),
         "descriptions": sorted({d for f in basic.get("formats") or [] for d in f.get("descriptions") or []}),
@@ -322,6 +323,7 @@ def main() -> None:
     ap.add_argument("--refresh", type=int, default=250, help="re-fetch market stats for this many stalest releases")
     ap.add_argument("--apple", type=int, default=500, help="max Apple preview lookups this run")
     ap.add_argument("--spotify", type=int, default=1000, help="max Spotify track lookups this run")
+    ap.add_argument("--entities", type=int, default=0, help="max Discogs requests for artist and label profiles this run")
     ap.add_argument("--audio", type=int, default=0, help="max tracks to measure BPM and energy for this run")
     ap.add_argument("--workers", type=int, default=4, help="Discogs requests in flight at once")
     ap.add_argument("--max-rate", type=float, default=0, help="cap on Discogs requests a minute (0 = whatever Discogs allows)")
@@ -335,12 +337,13 @@ def main() -> None:
     out = Path(args.out)
 
     cache, positions, clusters, regions, salt = {}, {}, [], [], None
-    collection_value = {}
+    collection_value, entities = {}, {}
     if out.exists():
         try:
             blob = out.read_bytes()
             previous_payload = decrypt(blob, password)
             previous = previous_payload["releases"]
+            entities = previous_payload.get("entities", {})
             cache = {r["id"]: r for r in previous if "stats_at" in r}
             if previous_payload.get("layout") == LAYOUT_VERSION:
                 positions = {r["id"]: r["xy"] for r in previous if "xy" in r}
@@ -379,6 +382,7 @@ def main() -> None:
             "regions": regions,
             "layout": LAYOUT_VERSION,
             "collection_value": collection_value,
+            "entities": entities,
             "gist_token": os.environ.get("GIST_TOKEN", ""),
         }
         out.parent.mkdir(parents=True, exist_ok=True)
@@ -457,6 +461,10 @@ def main() -> None:
     except (RuntimeError, urllib.error.HTTPError):
         value = {}
     collection_value = {k: float(re.sub(r"[^\d.]", "", v)) for k, v in value.items() if isinstance(v, str) and re.search(r"\d", v)}
+
+    from entities import add_entities
+    entities = add_entities(api, releases, entities, args.entities)
+    print(f"artist and label profiles done in {elapsed()}", file=sys.stderr)
 
     add_apple(releases, cache, args.apple)
     add_spotify(releases, cache, args.spotify)

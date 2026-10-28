@@ -22,6 +22,7 @@ export class Library {
     this.clusters = payload.clusters || [];
     this.regions = payload.regions || [];
     this.discogsValue = payload.collection_value || {};
+    this.entities = payload.entities || {};
     this.byId = new Map();
     this.itemCache = new Map();
     for (const r of this.releases) {
@@ -43,6 +44,18 @@ export class Library {
     const noCover = (r) => !r.cover || r.cover.includes('spacer.gif');
     const white = this.releases.find((r) => !noCover(r) && /just as long as i got you/.test(norm(r.title)) && r.artists.some((a) => norm(a) === 'frankie bones'));
     if (white) for (const r of this.releases.filter(noCover)) Object.assign(r, { cover: white.cover, thumb: white.thumb || white.cover });
+    // Names to Discogs IDs, for the artist and label profiles (most common ID when two share a name).
+    this.entityIds = { a: new Map(), l: new Map() };
+    const tally = (kind, name, id) => {
+      if (!id) return;
+      const m = this.entityIds[kind].get(name) || new Map();
+      m.set(id, (m.get(id) || 0) + 1);
+      this.entityIds[kind].set(name, m);
+    };
+    for (const r of this.releases) {
+      r.artists.forEach((a, i) => tally('a', a, r.artist_ids?.[i]));
+      r.labels.forEach((l) => tally('l', l.name, l.id));
+    }
     this.artists = this.group((r) => r.artists);
     this.labels = this.group((r) => [...new Set(r.labels.map((l) => l.name))]);
     this.genres = this.group((r) => r.genres);
@@ -65,6 +78,15 @@ export class Library {
     const valued = this.releases.filter((r) => r.est);
     this.estimatedTotal = valued.reduce((a, r) => a + r.worth * (r.copies || 1), 0);
     this.valuedCount = valued.length;
+  }
+
+  // Discogs profile of an artist ('a') or label ('l') by name, once a build has fetched it.
+  entity(kind, name) {
+    const ids = this.entityIds[kind].get(name);
+    if (!ids) return null;
+    const [id] = [...ids].sort((x, y) => y[1] - x[1])[0];
+    const e = this.entities[`${kind}${id}`];
+    return e && !e.missing ? { ...e, id } : null;
   }
 
   group(keysOf) {

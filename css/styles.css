@@ -670,3 +670,13 @@ img { display: block; }
 
 .row-tags { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .row-feel { font-size: 11.5px; color: var(--text3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ---------- artist & label pages ---------- */
+.entity-about .stats { margin-top: 24px; }
+.entity-profile { margin-top: 18px; max-width: 760px; line-height: 1.55; }
+.entity-profile summary { list-style: none; cursor: pointer; }
+.entity-profile summary::-webkit-details-marker { display: none; }
+.entity-profile[open] summary { display: none; }
+.entity-profile a { color: var(--accent); }
+.entity-profile .more { color: var(--accent); font-weight: 600; }
+.entity-about .chips { margin-top: 16px; }
