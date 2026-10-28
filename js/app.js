@@ -4,6 +4,7 @@ import { Player } from './player.js';
 import { Playlists } from './playlists.js';
 import { icon } from './icons.js';
 import { CollectionMap } from './map.js';
+import { mixes } from './mixes.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -131,6 +132,7 @@ function render() {
     album: () => albumView(lib.byId.get(Number(arg))),
     playlists: () => playlistsView(),
     playlist: () => playlistView(playlists.get(arg)),
+    mix: () => mixView(todaysMixes().find((m) => m.id === arg)),
     search: () => searchView(r.q.get('q') || ''),
     library: () => libraryView(),
   };
@@ -172,6 +174,7 @@ function renderSidebar() {
       <h6>Library</h6>
       ${NAV.map(([id, label, ic]) => `<a href="#/${id}" data-nav="${id}">${icon(ic)}<span>${label}</span></a>`).join('')}
       <h6>Playlists <button class="icon-btn" data-action="new-playlist" title="New Playlist">${icon('plus')}</button></h6>
+      <a href="#/playlists" data-nav="playlists">${icon('sparkles')}<span>Made for You</span></a>
       ${playlists.all.map((p) => `<a href="#/playlist/${p.id}" data-nav="playlist:${p.id}" data-drop-playlist="${p.id}">${icon('playlist')}<span>${esc(p.name)}</span></a>`).join('')}
       ${playlists.all.length ? '' : '<p class="side-empty">Create a playlist with + or from any track’s ••• menu.</p>'}
     </nav>
@@ -190,9 +193,9 @@ function renderTabbar() {
 }
 
 function highlightNav(view = 'discover', arg) {
-  const id = view === 'playlist' ? `playlist:${arg}` : view;
+  const id = view === 'playlist' ? `playlist:${arg}` : view === 'mix' ? 'playlists' : view;
   document.querySelectorAll('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === id));
-  const tabFor = { discover: 'discover', list: 'discover', map: 'map', search: 'search', playlists: 'playlists', playlist: 'playlists' }[view] || 'library';
+  const tabFor = { discover: 'discover', list: 'discover', map: 'map', search: 'search', playlists: 'playlists', playlist: 'playlists', mix: 'playlists' }[view] || 'library';
   document.querySelectorAll('[data-tab]').forEach((a) => a.classList.toggle('active', a.dataset.tab === tabFor));
 }
 
@@ -670,6 +673,7 @@ function discoverView() {
   $('#main').innerHTML = `${header('Listen Now', { actions: false, kicker: hello, sub: worth })}
     ${first ? `<section class="hero-shelf">${first.list.slice(0, 5).map((r, i) => `<a class="feature ${i ? '' : 'big'} ${lib.silent(r) ? 'silent' : ''}" href="#/album/${r.id}">${art(r)}<span class="feature-text"><small>${i ? '' : esc(first.title)}</small><b>${esc(r.title)}</b><span>${esc(r.artist)}</span></span><button class="card-play" data-play-album="${r.id}" aria-label="Play">${icon('play')}</button></a>`).join('')}</section>
       <div class="hero-actions"><button class="btn btn-primary" data-action="shuffle-rediscover">${icon('shuffle')}Shuffle Rediscover</button><a class="btn" href="#/list/rediscover">See All</a></div>` : ''}
+    ${mixShelf()}
     ${rest.map((sh) => shelf(sh.title, sh.list.slice(0, 16), sh.href || `#/list/${sh.key}`, sh)).join('')}`;
 }
 
@@ -718,9 +722,60 @@ function mosaic(items, cls) {
   return `<div class="${cls} mosaic">${covers.map((c) => `<img src="${esc(c)}" alt="" loading="lazy">`).join('')}</div>`;
 }
 
+// Made for You turns over daily; the reroll button picks another set for today.
+const MIX_TURN = 'listener.mixturn';
+function mixTurn() {
+  try {
+    const t = JSON.parse(localStorage.getItem(MIX_TURN) || 'null');
+    return t?.day === new Date().toISOString().slice(0, 10) ? t.turn : 0;
+  } catch { return 0; }
+}
+const todaysMixes = () => mixes(lib, mixTurn());
+
+function mixCard(m) {
+  return `<div class="card"><div class="card-cover"><a class="card-art" href="#/mix/${m.id}">${mosaic(m.items, '')}</a>
+    <button class="card-play" data-play-mix="${m.id}" aria-label="Play">${icon('play')}</button></div>
+    <a class="card-title" href="#/mix/${m.id}">${esc(m.name)}</a><span class="card-sub">${esc(m.sub)}</span></div>`;
+}
+
+function mixShelf() {
+  const list = todaysMixes();
+  if (!list.length) return '';
+  return `<section class="shelf"><h2 class="section-title"><a href="#/playlists">Made for You ${icon('chevron-right')}</a></h2>
+    <p class="shelf-sub">New mixes every day from your notes, countries, eras and styles.</p>
+    <div class="shelf-row">${list.map(mixCard).join('')}</div></section>`;
+}
+
+function mixView(m) {
+  if (!m) return emptyView('This mix has rotated out. Today’s mixes are in Playlists.');
+  viewReleases = [...new Set(m.items.map((t) => lib.byId.get(t.rid)))];
+  const list = registerList(m.items);
+  $('#main').innerHTML = `
+    <section class="album-hero">
+      ${mosaic(m.items, 'album-art')}
+      <div class="album-info">
+        <p class="kicker">Made for You</p>
+        <h1>${esc(m.name)}</h1>
+        <p class="album-meta">${esc(m.sub)} · ${plural(m.items.length, 'song')}</p>
+        <div class="head-actions">
+          <button class="btn btn-primary" data-play-mix="${m.id}">${icon('play')}Play</button>
+          <button class="btn" data-play-mix="${m.id}" data-shuffle>${icon('shuffle')}Shuffle</button>
+          <button class="btn" data-save-mix="${m.id}">${icon('plus')}Save</button>
+        </div>
+      </div>
+    </section>
+    <div class="tracks">${trackRows(m.items, { list, covers: true })}</div>`;
+}
+
 function playlistsView() {
   viewReleases = [];
-  $('#main').innerHTML = `${header('Playlists', { actions: false, sub: playlists.token ? 'Synced across your devices with a private GitHub Gist.' : 'Saved on this device.' })}
+  const made = todaysMixes();
+  $('#main').innerHTML = `${header('Playlists', { actions: false })}
+    ${made.length ? `<div class="section-head"><h2 class="section-title">Made for You</h2><button class="btn" data-action="reroll-mixes">${icon('shuffle')}New Mixes</button></div>
+    <p class="shelf-sub">Rotates daily: moods from your notes, countries and decades, Discogs styles, your genre tags and map clusters.</p>
+    <div class="grid">${made.map(mixCard).join('')}</div>` : ''}
+    <h2 class="section-title">Your Playlists</h2>
+    <p class="shelf-sub">${playlists.token ? 'Synced across your devices with a private GitHub Gist.' : 'Saved on this device.'}</p>
     <div class="grid">
       <button class="card card-new" data-action="new-playlist"><span class="card-art art-empty">${icon('plus')}</span><span class="card-title">New Playlist</span></button>
       ${playlists.all.map((p) => {
@@ -1069,6 +1124,18 @@ function bindGlobal() {
         { label: 'Delete Playlist', icon: 'close', danger: true, run: () => { if (confirm(`Delete “${p.name}”?`)) { playlists.remove(p.id); go('#/playlists'); } } },
       ]);
     }
+    if ((x = el('[data-play-mix]'))) {
+      e.preventDefault();
+      const m = todaysMixes().find((y) => y.id === x.dataset.playMix);
+      return m && startPlay(m.items, 0, { shuffle: x.hasAttribute('data-shuffle') });
+    }
+    if ((x = el('[data-save-mix]'))) {
+      const m = todaysMixes().find((y) => y.id === x.dataset.saveMix);
+      if (!m) return;
+      const p = playlists.create(m.name, m.items);
+      toast(`Saved “${m.name}” to your playlists`);
+      return go(`#/playlist/${p.id}`);
+    }
     if ((x = el('[data-play-playlist]'))) {
       e.preventDefault();
       const items = playlistItems(playlists.get(x.dataset.playPlaylist));
@@ -1098,6 +1165,10 @@ function bindGlobal() {
         'shuffle-rediscover': () => playReleases(shelves()[0].list, true),
         'shuffle-view': () => playReleases(viewReleases, true),
         'new-playlist': () => newPlaylist(),
+        'reroll-mixes': () => {
+          try { localStorage.setItem(MIX_TURN, JSON.stringify({ day: new Date().toISOString().slice(0, 10), turn: mixTurn() + 1 })); } catch {}
+          render();
+        },
         'clear-filters': () => { const r = route(); go(`#/${r.seg.map(enc).join('/')}${r.q.get('sort') ? `?sort=${r.q.get('sort')}` : ''}`); },
         lock: () => { forgetKey(); location.reload(); },
       };

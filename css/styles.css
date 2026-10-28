@@ -255,6 +255,9 @@ img { display: block; }
 
 /* ---------- shelves ---------- */
 .shelf-sub { color: var(--text2); margin: -8px 0 12px; font-size: 13px; }
+.section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.section-head .section-title { margin-bottom: 12px; }
+.section-head .btn { margin-top: 24px; }
 .shelf-row {
   display: grid; grid-auto-flow: column; grid-auto-columns: 168px; gap: 20px; overflow-x: auto; overflow-y: hidden;
   scroll-snap-type: x mandatory; padding-bottom: 8px; margin: 0 -40px; padding-left: 40px; padding-right: 40px; scroll-padding-left: 40px;

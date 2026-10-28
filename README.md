@@ -6,6 +6,7 @@ An Apple Music–style player for my Discogs collection. Audio comes from the Yo
 - Instant search across titles, artists, labels, catalog numbers, tracks and notes (`⌘K` or `/`)
 - Listen Now: Rediscover, On This Day, Best Want / Have Ratio, Most Valuable and Heating Up (estimated value), Nobody’s Selling, Rarest, daily label, style and genre-tag spotlights, notes
 - Collection Map: named islands of records sharing styles, eras, labels and genre tags
+- Made for You: ten playlists a day built from the moods in your notes, countries and decades, Discogs styles, your genre tags, map clusters and labels (reroll with New Mixes, keep one with Save)
 - Playlists synced across devices through a private GitHub Gist
 - Works on the phone (add to home screen)
 
