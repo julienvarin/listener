@@ -10,6 +10,9 @@ on:
       limit:
         description: Max releases to fetch details for (0 = all)
         default: "0"
+      audio:
+        description: Measure BPM and energy for up to this many tracks ("all" = every track not measured yet, empty = none)
+        default: ""
       refresh:
         description: Re-fetch market stats and prices for this many of the stalest releases ("all" = every release, empty = none)
         default: ""
@@ -37,6 +40,7 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -r requirements.txt
+      - run: command -v ffmpeg || (sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg)  # decodes preview clips for BPM and energy
       - id: pages
         uses: actions/configure-pages@v5
       # The live bundle is the cache: only new records and the stalest market stats are re-fetched.
@@ -52,7 +56,7 @@ jobs:
           SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
           SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
         # Slow lookups (market refresh, Apple previews) only run nightly so pushes deploy in minutes.
-        run: python scripts/build_data.py --refresh ${{ inputs.refresh == 'all' && 1000000 || inputs.refresh || (github.event_name == 'schedule' && 500 || 0) }} --apple ${{ github.event_name == 'schedule' && 500 || 0 }} --spotify ${{ github.event_name != 'push' && 1500 || 0 }} --limit ${{ inputs.limit || 0 }}
+        run: python scripts/build_data.py --refresh ${{ inputs.refresh == 'all' && 1000000 || inputs.refresh || (github.event_name == 'schedule' && 500 || 0) }} --apple ${{ github.event_name == 'schedule' && 500 || 0 }} --spotify ${{ github.event_name != 'push' && 1500 || 0 }} --audio ${{ inputs.audio == 'all' && 1000000 || inputs.audio || (github.event_name == 'schedule' && 3000 || 0) }} --limit ${{ inputs.limit || 0 }}
       - name: Assemble site
         run: |
           mkdir -p _site/data

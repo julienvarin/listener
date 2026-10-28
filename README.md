@@ -11,6 +11,15 @@ An Apple Music–style player for my Discogs collection. Audio comes from the Yo
 - Playlists synced across devices through a private GitHub Gist
 - Works on the phone (add to home screen)
 
+## BPM and energy
+
+Each track's tempo and energy are measured on its 30-second preview (`scripts/audio_features.py`): found on Deezer (free API, no key), or the Apple preview when Deezer doesn't have it, decoded with ffmpeg and analyzed with librosa. Spotify no longer offers its audio features to apps.
+
+- **BPM:** tempo of the onset envelope. Beat trackers often report double the felt tempo of slow music, so Downtempo, Trip Hop, Hip Hop, Dub and similar Discogs styles are folded down by half above 125 BPM. Tracks without a clear pulse get no BPM. Expect the right ballpark (slow vs fast) rather than DJ-grade precision.
+- **Energy 0–10:** loudness, rhythmic busyness and brightness, each ranked against the rest of the collection and averaged. 0 is your calmest track, 10 your most intense.
+
+About 300 tracks a minute. Nightly builds measure up to 3,000 new tracks; the manual run's `audio` input takes `all`. Both show on track rows and work as smart playlist rules (BPM, Energy) and orders (slowest, calmest…).
+
 ## Estimated value
 
 Each record shows a single estimated value next to the lowest price (`js/value.js`):

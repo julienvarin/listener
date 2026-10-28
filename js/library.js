@@ -61,6 +61,7 @@ export class Library {
       r.est = estimateValue(r);
       r.worth = r.est ? (r.est.ownValue ?? r.est.value) : 0;
     }
+    this.energy = energyScale(this.releases);
     const valued = this.releases.filter((r) => r.est);
     this.estimatedTotal = valued.reduce((a, r) => a + r.worth * (r.copies || 1), 0);
     this.valuedCount = valued.length;
@@ -100,6 +101,8 @@ export class Library {
         dur: tr.t.dur || fmtTime(tr.v?.dur),
         yt: tr.v?.yt || null,
         apple: r.apple?.[tr.i],
+        bpm: r.audio?.[tr.i]?.[0] ?? null,
+        energy: r.audio?.[tr.i] ? this.energy(r.audio[tr.i]) : null,
         spotify: r.spotify?.[tr.i] || null,
       })),
       extras: videos.filter((v) => !v.used).map((v) => base(`v${v.yt}`, {
@@ -154,6 +157,22 @@ export class Library {
       tracks,
     };
   }
+}
+
+// Energy 0–10 from a track's measurements ([bpm, loudness dB, onset strength, brightness], see
+// scripts/audio_features.py): the average of where its loudness, rhythmic busyness and brightness rank in the
+// collection, so 0 is the calmest track you own and 10 the most intense.
+function energyScale(releases) {
+  const cols = [[], [], []];
+  for (const r of releases) for (const a of r.audio || []) if (a) for (let k = 0; k < 3; k++) cols[k].push(a[k + 1]);
+  cols.forEach((c) => c.sort((x, y) => x - y));
+  const rank = (c, v) => {
+    if (c.length < 2) return 0.5;
+    let lo = 0, hi = c.length;
+    while (lo < hi) { const m = (lo + hi) >> 1; if (c[m] < v) lo = m + 1; else hi = m; }
+    return lo / (c.length - 1);
+  };
+  return (a) => Math.round(((rank(cols[0], a[1]) + rank(cols[1], a[2]) + rank(cols[2], a[3])) / 3) * 100) / 10;
 }
 
 // Why two records sit near each other: what they share.

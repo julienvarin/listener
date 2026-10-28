@@ -667,3 +667,6 @@ img { display: block; }
   .rule .icon-btn { grid-row: 1; grid-column: 3; }
   .dialog-card select, .dialog-card input { font-size: 16px; }
 }
+
+.row-tags { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.row-feel { font-size: 11.5px; color: var(--text3); font-variant-numeric: tabular-nums; white-space: nowrap; }

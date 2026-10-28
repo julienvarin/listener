@@ -322,6 +322,7 @@ def main() -> None:
     ap.add_argument("--refresh", type=int, default=250, help="re-fetch market stats for this many stalest releases")
     ap.add_argument("--apple", type=int, default=500, help="max Apple preview lookups this run")
     ap.add_argument("--spotify", type=int, default=1000, help="max Spotify track lookups this run")
+    ap.add_argument("--audio", type=int, default=0, help="max tracks to measure BPM and energy for this run")
     ap.add_argument("--workers", type=int, default=4, help="Discogs requests in flight at once")
     ap.add_argument("--max-rate", type=float, default=0, help="cap on Discogs requests a minute (0 = whatever Discogs allows)")
     ap.add_argument("--no-suggestions", action="store_true", help="skip Discogs price suggestions")
@@ -459,6 +460,13 @@ def main() -> None:
 
     add_apple(releases, cache, args.apple)
     add_spotify(releases, cache, args.spotify)
+    if args.audio:
+        from audio_features import add_audio
+        add_audio(releases, cache, args.audio)
+    else:
+        for r in releases:
+            if "audio" in cache.get(r["id"], {}) and len(cache[r["id"]]["audio"]) == len(r.get("tracks", [])):
+                r["audio"] = cache[r["id"]]["audio"]
 
     seed = None
     if os.environ.get("CLUSTER_KEY") and Path(args.seed).exists():

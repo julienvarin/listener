@@ -8,8 +8,11 @@ import { moodsOf } from './mixes.js';
 
 const DAY = 864e5;
 
-// [key, label, type, value(s) of a record]. Lists are matched on any of their values.
+// [key, label, type, value(s) of a record and track]. Lists are matched on any of their values. BPM and energy
+// belong to tracks: a playlist using them keeps only the tracks that match, not whole records.
 export const FIELDS = [
+  ['bpm', 'BPM', 'number', (r, t) => t?.bpm ?? undefined],
+  ['energy', 'Energy (0–10)', 'number', (r, t) => t?.energy ?? undefined],
   ['added', 'Date Added', 'date', (r) => r.added],
   ['year', 'Year', 'number', (r) => r.year],
   ['genre', 'Genre', 'list', (r) => r.genres],
@@ -45,7 +48,9 @@ export const OPS = {
   date: [['last', 'is in the last'], ['notlast', 'is not in the last'], ['after', 'is after'], ['before', 'is before'], ['between', 'is between']],
 };
 
-export const ORDERS = [['random', 'Random (new pick daily)'], ['added', 'Recently added'], ['year', 'Oldest first'], ['yeardesc', 'Newest first'], ['value', 'Most valuable'], ['rating', 'Highest rated'], ['want', 'Most wanted']];
+const TRACK_FIELDS = new Set(['bpm', 'energy']);
+
+export const ORDERS = [['random', 'Random (new pick daily)'], ['slow', 'Slowest first'], ['fast', 'Fastest first'], ['calm', 'Calmest first'], ['intense', 'Most intense first'], ['added', 'Recently added'], ['year', 'Oldest first'], ['yeardesc', 'Newest first'], ['value', 'Most valuable'], ['rating', 'Highest rated'], ['want', 'Most wanted']];
 
 export const blankRule = () => ({ f: 'style', op: 'is', v: [] });
 export const blankGroup = () => ({ match: 'any', rules: [blankRule()] });
@@ -60,11 +65,11 @@ const low = (s) => String(s ?? '').toLowerCase().trim();
 const num = (v) => (v === '' || v === undefined || v === null ? NaN : Number(v));
 const unitDays = { days: 1, weeks: 7, months: 30.44, years: 365.25 };
 
-function test(rule, r) {
+function test(rule, r, t) {
   const field = FIELD[rule.f];
   if (!field) return true;
   const [, , type, get] = field;
-  const raw = get(r);
+  const raw = get(r, t);
   if (type === 'list' || type === 'text') {
     const vals = (Array.isArray(raw) ? raw : [raw]).map(low);
     const want = values(rule).map(low);
@@ -105,15 +110,21 @@ function test(rule, r) {
 // the playlist.
 const active = (x) => (isGroup(x) ? x.rules.some(active) : FIELD[x.f] && (isMulti(x.f) ? values(x).length : x.v !== '' && x.v !== undefined));
 
-function matches(group, r) {
+function matches(group, r, t) {
   const rules = group.rules.filter(active);
   if (!rules.length) return true;
-  const ok = (x) => (isGroup(x) ? matches(x, r) : test(x, r));
+  const ok = (x) => (isGroup(x) ? matches(x, r, t) : test(x, r, t));
   return group.match === 'any' ? rules.some(ok) : rules.every(ok);
 }
 
+const usesTracks = (g) => g.rules.some((x) => (isGroup(x) ? usesTracks(x) : active(x) && TRACK_FIELDS.has(x.f)));
+
+// The tracks of a record a definition keeps: all of them for record-level rules, the matching ones otherwise.
+const keptTracks = (lib, def, r) => (usesTracks(def) ? lib.playable(r).filter((t) => matches(def, r, t)) : matches(def, r) ? lib.playable(r) : []);
+
 export function matchReleases(lib, def) {
-  return lib.releases.filter((r) => matches(def, r));
+  if (!usesTracks(def)) return lib.releases.filter((r) => matches(def, r));
+  return lib.releases.filter((r) => keptTracks(lib, def, r).length);
 }
 
 function seeded(text) {
@@ -142,22 +153,34 @@ const SORT = {
   want: (a, b) => (b.want || 0) - (a.want || 0),
 };
 
+// Ascending (dir 1) or descending (dir -1) on a track measurement; unmeasured tracks go last.
+const by = (key, dir) => (a, b) => {
+  const x = a[key] ?? null, y = b[key] ?? null;
+  if (x === null || y === null) return (x === null) - (y === null);
+  return dir * (x - y);
+};
+const TRACK_SORT = { slow: by('bpm', 1), fast: by('bpm', -1), calm: by('energy', 1), intense: by('energy', -1) };
+
 // Tracks for a smart playlist: matching, playable records in the chosen order, `per` tracks each, up to `limit`.
 export function smartItems(lib, p) {
   const def = p.smart;
   const rand = seeded(`${p.id}:${new Date().toISOString().slice(0, 10)}`);
-  let rs = matchReleases(lib, def).filter((r) => !lib.silent(r));
-  rs = def.order === 'random' || !SORT[def.order] ? shuffle(rs, rand) : rs.sort(SORT[def.order]);
+  const byTrack = TRACK_SORT[def.order];
+  let rs = lib.releases.filter((r) => !lib.silent(r));
+  rs = SORT[def.order] ? rs.sort(SORT[def.order]) : shuffle(rs, rand);
   const limit = Number(def.limit) || Infinity;
   const per = Number(def.per) || Infinity;
   const out = [];
   for (const r of rs) {
-    const items = lib.playable(r);
+    const items = keptTracks(lib, def, r);
+    if (!items.length) continue;
     const yt = items.filter((t) => t.yt);
     const pool = yt.length ? yt : items;
-    out.push(...(def.order === 'random' ? shuffle(pool, rand) : pool).slice(0, per));
-    if (out.length >= limit) break;
+    out.push(...(byTrack ? pool.slice().sort(byTrack) : SORT[def.order] ? pool : shuffle(pool, rand)).slice(0, per));
+    if (!byTrack && out.length >= limit) break;
   }
+  // Track orders rank across the whole playlist; tracks without a measurement go last.
+  if (byTrack) out.sort(byTrack);
   return out.slice(0, limit);
 }
 

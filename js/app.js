@@ -473,13 +473,14 @@ function trackRows(items, { list, numbered = true, covers = false, playlistId = 
   return items.map((t, i) => {
     const apple = t.yt ? undefined : appleCached(t);
     const state = t.yt ? '' : apple === null ? (t.spotify ? 'spotify' : 'unavailable') : 'preview';
+    const feel = [t.bpm ? `${Math.round(t.bpm)} BPM` : '', t.energy != null ? `E${Math.round(t.energy)}` : ''].filter(Boolean).join(' · ');
     return `<div class="row ${state}" data-list="${id}" data-index="${i}" data-rid="${t.rid}" data-key="${t.key}" ${playlistId ? 'draggable="true"' : ''}>
       <span class="row-lead">${covers
         ? `<img src="${esc(t.thumb || t.cover)}" alt="" loading="lazy">`
         : `<span class="row-num">${esc(numbered ? t.pos || i + 1 : '')}</span>`}
         <span class="row-eq"><i></i><i></i><i></i></span><span class="row-playicon">${icon('play')}</span></span>
       <span class="row-main"><span class="row-title">${esc(t.title)}</span>${covers ? `<span class="row-sub">${esc(t.artist)} — <a href="#/album/${t.rid}">${esc(t.album)}</a></span>` : t.artistDiffers ? `<span class="row-sub">${esc(t.artist)}</span>` : ''}</span>
-      ${state === 'preview' ? '<span class="badge">Preview</span>' : state === 'spotify' ? '<span class="badge">Spotify</span>' : state === 'unavailable' ? '<span class="badge muted">No audio</span>' : ''}
+      <span class="row-tags">${feel ? `<span class="row-feel" title="Tempo · energy from 0 (calmest) to 10 (most intense)">${feel}</span>` : ''}${state === 'preview' ? '<span class="badge">Preview</span>' : state === 'spotify' ? '<span class="badge">Spotify</span>' : state === 'unavailable' ? '<span class="badge muted">No audio</span>' : ''}</span>
       <span class="row-dur">${esc(t.dur || '')}</span>
       <button class="icon-btn row-more" data-more-track ${playlistId ? `data-playlist="${playlistId}"` : ''} aria-label="More">${icon('more')}</button>
     </div>`;
