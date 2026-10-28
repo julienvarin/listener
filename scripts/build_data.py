@@ -7,6 +7,7 @@ endpoint (Discogs allows ~60 req/min).
 """
 
 import argparse
+import base64
 import gzip
 import json
 import os
@@ -193,6 +194,73 @@ def add_apple(releases: list, cache: dict, budget: int) -> None:
         budget -= len(found)
 
 
+class Spotify:
+    """Track search with an app token (client credentials): no user login needed to find IDs."""
+
+    def __init__(self, client_id: str, secret: str):
+        body = urllib.parse.urlencode({"grant_type": "client_credentials"}).encode()
+        auth = base64.b64encode(f"{client_id}:{secret}".encode()).decode()
+        req = urllib.request.Request("https://accounts.spotify.com/api/token", data=body, headers={"Authorization": f"Basic {auth}"})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            self.token = json.load(r)["access_token"]
+
+    def find(self, title: str, artist: str) -> str | None:
+        """Same matching rule as apple_preview(): an artist name overlaps and the title's first word appears."""
+        title = re.sub(r"\((original|extended)? ?mix\)", "", title, flags=re.I).strip()
+        artists = [a for a in (norm(x) for x in re.split(r",|&| vs\.? | feat\.? | ft\.? | and | x ", artist, flags=re.I)) if a]
+        q = f"{title} {artists[0] if artists else ''}"
+        url = "https://api.spotify.com/v1/search?" + urllib.parse.urlencode({"q": q, "type": "track", "limit": "10"})
+        for attempt in range(4):
+            try:
+                with urllib.request.urlopen(urllib.request.Request(url, headers={"Authorization": f"Bearer {self.token}"}), timeout=20) as r:
+                    items = json.load(r).get("tracks", {}).get("items", [])
+                break
+            except urllib.error.HTTPError as e:
+                if e.code != 429:
+                    raise
+                time.sleep(int(e.headers.get("Retry-After", 5)) + 1)
+        else:
+            return None
+        words = norm(title).split(" ")
+        first = words[0] if words else ""
+        for x in items:
+            names = [norm(a.get("name", "")) for a in x.get("artists", [])]
+            if any(a in n or n in a for a in artists for n in names if n) and first in norm(x.get("name", "")):
+                return x["id"]
+        return None
+
+
+def add_spotify(releases: list, cache: dict, budget: int) -> None:
+    """Find Spotify tracks for what neither YouTube nor Apple can play. Needs SPOTIFY_CLIENT_ID/SECRET."""
+    for r in releases:
+        old = cache.get(r["id"], {}).get("spotify")
+        if old is not None and len(old) == len(r.get("tracks", [])):
+            r["spotify"] = old
+    client_id, secret = os.environ.get("SPOTIFY_CLIENT_ID"), os.environ.get("SPOTIFY_CLIENT_SECRET")
+    todo = [r for r in releases if r.get("apple") is not None and not all(r["apple"]) and r.get("tracks") and "spotify" not in r]
+    if not (client_id and secret and budget and todo):
+        return
+    try:
+        api = Spotify(client_id, secret)
+    except (urllib.error.URLError, KeyError, ValueError) as e:
+        print(f"Spotify login failed ({e}); skipping", file=sys.stderr)
+        return
+    print(f"looking up Spotify for {len(todo)} silent records", file=sys.stderr)
+    for r in todo:
+        if budget <= 0:
+            return
+        try:
+            r["spotify"] = [
+                None if apple else api.find(t["title"] or "Untitled", ", ".join(t.get("artists") or r["artists"]) or "Unknown Artist")
+                for t, apple in zip(r["tracks"], r["apple"])
+            ]
+        except (urllib.error.URLError, TimeoutError, ValueError) as e:
+            print(f"  skipped Spotify lookup for {r['id']}: {e}", file=sys.stderr)
+            continue
+        budget -= len(r["tracks"])
+        time.sleep(0.3)
+
+
 HISTORY = 24
 
 
@@ -211,6 +279,7 @@ def main() -> None:
     ap.add_argument("--limit", type=int, default=0, help="max new releases to detail this run (0 = all)")
     ap.add_argument("--refresh", type=int, default=250, help="re-fetch market stats for this many stalest releases")
     ap.add_argument("--apple", type=int, default=500, help="max Apple preview lookups this run")
+    ap.add_argument("--spotify", type=int, default=1000, help="max Spotify track lookups this run")
     ap.add_argument("--no-suggestions", action="store_true", help="skip Discogs price suggestions")
     ap.add_argument("--seed", default="data/clusters.enc", help="curated clusters, decrypted with CLUSTER_KEY")
     args = ap.parse_args()
@@ -331,6 +400,7 @@ def main() -> None:
     collection_value = {k: float(re.sub(r"[^\d.]", "", v)) for k, v in value.items() if isinstance(v, str) and re.search(r"\d", v)}
 
     add_apple(releases, cache, args.apple)
+    add_spotify(releases, cache, args.spotify)
 
     seed = None
     if os.environ.get("CLUSTER_KEY") and Path(args.seed).exists():

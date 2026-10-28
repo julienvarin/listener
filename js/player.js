@@ -11,6 +11,18 @@ function loadYouTube() {
   return ytApi;
 }
 
+// Spotify's embed player: full tracks when the browser is logged in to Spotify, 30s previews otherwise.
+let spotifyApi;
+function loadSpotify() {
+  spotifyApi ||= new Promise((resolve) => {
+    window.onSpotifyIframeApiReady = resolve;
+    const s = document.createElement('script');
+    s.src = 'https://open.spotify.com/embed/iframe-api/v1';
+    document.head.append(s);
+  });
+  return spotifyApi;
+}
+
 export class Player extends EventTarget {
   constructor() {
     super();
@@ -43,6 +55,8 @@ export class Player extends EventTarget {
         },
       });
     }));
+    this.spotify = null;
+    this.sp = { position: 0, duration: 0 };
     setInterval(() => this.source === 'yt' && this.playing && this.emit('time'), 250);
     setInterval(() => this.watchAd(), 500);
     this.mediaSession();
@@ -56,12 +70,14 @@ export class Player extends EventTarget {
   get time() {
     if (this.source === 'yt') return this.yt?.getCurrentTime?.() || 0;
     if (this.source === 'apple') return this.audio.currentTime || 0;
+    if (this.source === 'spotify') return this.sp.position / 1000;
     return 0;
   }
 
   get duration() {
     if (this.source === 'yt') return this.yt?.getDuration?.() || 0;
     if (this.source === 'apple') return this.audio.duration || 0;
+    if (this.source === 'spotify') return this.sp.duration / 1000;
     return 0;
   }
 
@@ -138,6 +154,7 @@ export class Player extends EventTarget {
     const preview = await applePreview(item);
     if (token !== this.loadToken) return;
     if (!preview) {
+      if (item.spotify) return this.playSpotify(item, token);
       this.emit('unavailable');
       return this.advance();
     }
@@ -146,6 +163,37 @@ export class Player extends EventTarget {
     this.audio.src = preview.url;
     this.audio.play().catch(() => this.setPlaying(false));
     this.emit('track');
+  }
+
+  spotifyReady() {
+    this.spotifyCtl ||= loadSpotify().then((api) => new Promise((resolve) => {
+      const el = document.createElement('div');
+      document.getElementById('sp-player').append(el);
+      api.createController(el, { width: 300, height: 80 }, (ctl) => {
+        ctl.addListener('playback_update', (e) => this.spotifyUpdate(e.data));
+        resolve(ctl);
+      });
+    }));
+    return this.spotifyCtl;
+  }
+
+  async playSpotify(item, token) {
+    this.source = 'spotify';
+    this.sp = { position: 0, duration: 0, uri: `spotify:track:${item.spotify}`, done: false };
+    this.emit('track');
+    const ctl = await this.spotifyReady();
+    if (token !== this.loadToken) return;
+    this.spotify = ctl;
+    ctl.loadUri(this.sp.uri);
+    ctl.play();
+  }
+
+  spotifyUpdate({ isPaused, isBuffering, position, duration, playingURI }) {
+    if (this.source !== 'spotify' || playingURI !== this.sp.uri) return;
+    Object.assign(this.sp, { position, duration });
+    if (!isBuffering && isPaused === this.playing) this.setPlaying(!isPaused);
+    this.emit('time');
+    if (duration && position >= duration - 250 && !this.sp.done) { this.sp.done = true; this.ended(); }
   }
 
   // Ads play inside the YouTube iframe, and the API doesn't report them. What it does show: the player
@@ -170,6 +218,7 @@ export class Player extends EventTarget {
     this.audio.pause();
     this.audio.removeAttribute('src');
     try { this.yt?.stopVideo?.(); } catch {}
+    if (this.source === 'spotify') this.spotify?.pause();
     this.source = null;
   }
 
@@ -232,6 +281,7 @@ export class Player extends EventTarget {
     this.moved = Date.now();
     if (this.source === 'yt') this.yt.playVideo();
     else if (this.source === 'apple') this.audio.play();
+    else if (this.source === 'spotify') this.spotify?.resume();
     else if (this.current) this.load();
   }
 
@@ -239,6 +289,7 @@ export class Player extends EventTarget {
     this.held = true;
     if (this.source === 'yt') this.yt.pauseVideo();
     else if (this.source === 'apple') this.audio.pause();
+    else if (this.source === 'spotify') this.spotify?.pause();
   }
 
   toggle() { this.playing ? this.pause() : this.resume(); }
@@ -246,6 +297,7 @@ export class Player extends EventTarget {
   seek(t) {
     if (this.source === 'yt') this.yt.seekTo(t, true);
     else if (this.source === 'apple') this.audio.currentTime = t;
+    else if (this.source === 'spotify') this.spotify?.seek(t);
     this.emit('time');
   }
 

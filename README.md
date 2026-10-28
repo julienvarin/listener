@@ -1,6 +1,6 @@
 # Listener
 
-An Apple Music–style player for my Discogs collection. Audio comes from the YouTube videos linked on each release (played audio-only), with Apple Music 30-second previews as a fallback.
+An Apple Music–style player for my Discogs collection. Audio comes from the YouTube videos linked on each release (played audio-only), then Apple Music 30-second previews, then Spotify (full tracks when the browser is logged in to Spotify, 30-second previews otherwise).
 
 - Browse by artist, label, genre, style, decade, format, country, and my own Discogs note fields (genre tag, condition, tag)
 - Instant search across titles, artists, labels, catalog numbers, tracks and notes (`⌘K` or `/`)
@@ -50,6 +50,7 @@ Repo secrets (Settings → Secrets and variables → Actions):
 | `DISCOGS_USERNAME` | Discogs username |
 | `LISTENER_PASSWORD` | Password for the site |
 | `GIST_TOKEN` | Classic GitHub token with only the `gist` scope (playlist sync) |
+| `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` | Optional. From an app at developer.spotify.com/dashboard (Web API). Nightly and manual builds then look up Spotify tracks for records YouTube and Apple can't play |
 
 Pages must be set to deploy from GitHub Actions. Then run the **Build and deploy** workflow. The first run fetches every release (about 45 minutes at Discogs' rate limit).
 

@@ -420,6 +420,7 @@ img { display: block; }
 #yt-host { position: fixed; left: -400px; top: 0; width: 200px; height: 200px; overflow: hidden; pointer-events: none; opacity: 0; }
 #yt-host.shown { z-index: 16; opacity: 1; pointer-events: auto; border-radius: 12px; background: #000; }
 #yt-host.shown iframe { width: 100%; height: 100%; }
+#sp-host { position: fixed; left: -400px; top: 0; width: 300px; height: 80px; overflow: hidden; pointer-events: none; opacity: 0; }
 #sheet-video { aspect-ratio: 16 / 9; background: #000; }
 .sheet-meta .icon-btn.on { color: var(--accent); }
 .sheet-hint { margin: 10px 0 0; color: var(--text2); font-size: 13px; text-align: center; }

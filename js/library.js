@@ -100,6 +100,7 @@ export class Library {
         dur: tr.t.dur || fmtTime(tr.v?.dur),
         yt: tr.v?.yt || null,
         apple: r.apple?.[tr.i],
+        spotify: r.spotify?.[tr.i] || null,
       })),
       extras: videos.filter((v) => !v.used).map((v) => base(`v${v.yt}`, {
         pos: '',
@@ -125,9 +126,9 @@ export class Library {
     return tracks.length ? tracks : extras;
   }
 
-  // Known to have nothing to play: no YouTube video and no Apple preview on any track.
+  // Known to have nothing to play: no YouTube video, Apple preview or Spotify track on any track.
   silent(r) {
-    return !!r.stats_at && this.playable(r).every((t) => !t.yt && appleCached(t) === null);
+    return !!r.stats_at && this.playable(r).every((t) => !t.yt && !t.spotify && appleCached(t) === null);
   }
 
   search(q, limit = 60) {

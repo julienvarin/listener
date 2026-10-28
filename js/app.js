@@ -470,14 +470,14 @@ function trackRows(items, { list, numbered = true, covers = false, playlistId = 
   const id = list || registerList(items);
   return items.map((t, i) => {
     const apple = t.yt ? undefined : appleCached(t);
-    const state = t.yt ? '' : apple === null ? 'unavailable' : 'preview';
+    const state = t.yt ? '' : apple === null ? (t.spotify ? 'spotify' : 'unavailable') : 'preview';
     return `<div class="row ${state}" data-list="${id}" data-index="${i}" data-rid="${t.rid}" data-key="${t.key}" ${playlistId ? 'draggable="true"' : ''}>
       <span class="row-lead">${covers
         ? `<img src="${esc(t.thumb || t.cover)}" alt="" loading="lazy">`
         : `<span class="row-num">${esc(numbered ? t.pos || i + 1 : '')}</span>`}
         <span class="row-eq"><i></i><i></i><i></i></span><span class="row-playicon">${icon('play')}</span></span>
       <span class="row-main"><span class="row-title">${esc(t.title)}</span>${covers ? `<span class="row-sub">${esc(t.artist)} — <a href="#/album/${t.rid}">${esc(t.album)}</a></span>` : t.artistDiffers ? `<span class="row-sub">${esc(t.artist)}</span>` : ''}</span>
-      ${state === 'preview' ? '<span class="badge">Preview</span>' : state === 'unavailable' ? '<span class="badge muted">No audio</span>' : ''}
+      ${state === 'preview' ? '<span class="badge">Preview</span>' : state === 'spotify' ? '<span class="badge">Spotify</span>' : state === 'unavailable' ? '<span class="badge muted">No audio</span>' : ''}
       <span class="row-dur">${esc(t.dur || '')}</span>
       <button class="icon-btn row-more" data-more-track ${playlistId ? `data-playlist="${playlistId}"` : ''} aria-label="More">${icon('more')}</button>
     </div>`;
@@ -522,7 +522,7 @@ function albumView(r) {
         ${r.notes.Notes ? `<p class="album-note">${esc(r.notes.Notes)}</p>` : ''}
       </div>
     </section>
-    ${silent && (tracks.length || extras.length) ? '<p class="foot-note">No YouTube video or Apple Music preview for this record.</p>' : ''}
+    ${silent && (tracks.length || extras.length) ? '<p class="foot-note">No YouTube video, Apple Music preview or Spotify track for this record.</p>' : ''}
     <div class="tracks">${tracks.length ? trackRows(tracks) : ''}</div>
     ${extras.length ? `<h2 class="section-title">${tracks.length ? 'Other Videos' : 'Videos'}</h2><div class="tracks">${trackRows(extras, { numbered: false })}</div>` : ''}
     ${!tracks.length && !extras.length ? `<p class="foot-note">${r.stats_at ? 'No tracklist on Discogs for this release.' : 'Tracks for this record load with the next library build.'}</p>` : ''}
@@ -535,6 +535,7 @@ function albumView(r) {
       ${added ? `<div><dt>Added</dt><dd>${added}${r.copies > 1 ? ` · ${r.copies} copies` : ''}</dd></div>` : ''}
       ${['Media Condition', 'Sleeve Condition', 'Tag'].filter((k) => r.notes[k]).map((k) => `<div><dt>${k.replace(' Condition', '')}</dt><dd>${esc(r.notes[k])}</dd></div>`).join('')}
       <div><dt>Discogs</dt><dd><a href="https://www.discogs.com/release/${r.id}" target="_blank" rel="noopener">View release ↗</a> · <a href="https://www.discogs.com/sell/release/${r.id}" target="_blank" rel="noopener">Marketplace ↗</a></dd></div>
+      <div><dt>Listen elsewhere</dt><dd><a href="https://open.spotify.com/search/${enc(`${r.artists[0] || ''} ${r.title}`)}" target="_blank" rel="noopener">Spotify ↗</a> · <a href="https://music.apple.com/search?term=${enc(`${r.artists[0] || ''} ${r.title}`)}" target="_blank" rel="noopener">Apple Music ↗</a> · <a href="https://www.youtube.com/results?search_query=${enc(`${r.artists[0] || ''} ${r.title}`)}" target="_blank" rel="noopener">YouTube ↗</a></dd></div>
     </dl>
     ${shelf('Similar in Your Collection', (r.similar || []).map((id) => lib.byId.get(id)).filter(Boolean), `#/map?focus=${r.id}`)}
     ${shelf(`More by ${r.artists[0] || ''}`, byArtist, `#/artist/${enc(r.artists[0] || '')}`)}
@@ -896,7 +897,7 @@ function autoplayNext() {
 
 function renderPlayer() {
   const t = player.current;
-  const src = !t ? '' : player.source === 'apple' ? 'Apple Music Preview' : player.ad ? '<span class="ad-flag">Ad · muted</span>' : player.source === 'yt' ? 'YouTube' : '';
+  const src = !t ? '' : player.source === 'apple' ? 'Apple Music Preview' : player.source === 'spotify' ? 'Spotify' : player.ad ? '<span class="ad-flag">Ad · muted</span>' : player.source === 'yt' ? 'YouTube' : '';
   const playBtn = `<button class="ctl ctl-play" data-action="toggle" aria-label="${player.playing ? 'Pause' : 'Play'}">${icon(player.playing ? 'pause' : 'play')}</button>`;
   $('#playerbar').innerHTML = `
     <div class="pb-controls">

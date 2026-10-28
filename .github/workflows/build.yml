@@ -46,8 +46,10 @@ jobs:
           LISTENER_PASSWORD: ${{ secrets.LISTENER_PASSWORD }}
           GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
           CLUSTER_KEY: ${{ secrets.CLUSTER_KEY }}
+          SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
+          SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
         # Slow lookups (market refresh, Apple previews) only run nightly so pushes deploy in minutes.
-        run: python scripts/build_data.py --refresh ${{ github.event_name == 'schedule' && 250 || 0 }} --apple ${{ github.event_name == 'schedule' && 500 || 0 }} --limit ${{ inputs.limit || 0 }}
+        run: python scripts/build_data.py --refresh ${{ github.event_name == 'schedule' && 250 || 0 }} --apple ${{ github.event_name == 'schedule' && 500 || 0 }} --spotify ${{ github.event_name != 'push' && 1500 || 0 }} --limit ${{ inputs.limit || 0 }}
       - name: Assemble site
         run: |
           mkdir -p _site/data
