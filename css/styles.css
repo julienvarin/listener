@@ -640,7 +640,20 @@ img { display: block; }
 .rule-vals { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .rule-vals input, .rule-vals select { flex: 1; width: 100%; }
 .rule-vals span { color: var(--text2); }
-.dialog-card > .btn { align-self: flex-start; }
+.rule-group { display: flex; flex-direction: column; gap: 8px; }
+.rule-group.nested { padding: 10px 12px; border-radius: 12px; border: 1px solid var(--sep); background: var(--fill); }
+.group-head { display: flex; align-items: center; gap: 8px; color: var(--text2); }
+.group-head .icon-btn { margin-left: auto; }
+.group-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.vchips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; flex: 1; min-width: 0; padding: 3px; border-radius: 8px; border: 1px solid var(--sep); background: var(--bg2); }
+.vchips em { font-style: normal; font-size: 12px; color: var(--text3); }
+.vchip { display: inline-flex; align-items: center; gap: 2px; padding: 2px 4px 2px 9px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); font-weight: 600; font-size: 13px; }
+.vchip button { width: 18px; height: 18px; border-radius: 9px; line-height: 1; color: var(--accent); }
+.vchip button:hover { background: var(--accent); color: #fff; }
+.dialog-card .vchips input { flex: 1; min-width: 70px; border: 0; background: none; padding: 3px 5px; }
+.dialog-hint { margin: 0; font-size: 12.5px; color: var(--text2); }
+.dialog-hint em { font-style: normal; font-weight: 600; }
+.dialog-desc { margin: 0; font-size: 13px; color: var(--text2); }
 .dialog-grid { display: flex; flex-wrap: wrap; gap: 10px 18px; padding-top: 6px; border-top: 1px solid var(--sep); }
 .dialog-grid label { display: flex; align-items: center; gap: 8px; color: var(--text2); }
 .dialog-grid input { width: 70px; }

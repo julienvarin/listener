@@ -7,7 +7,7 @@ An Apple Music–style player for my Discogs collection. Audio comes from the Yo
 - Listen Now: Rediscover, On This Day, Best Want / Have Ratio, Most Valuable and Heating Up (estimated value), Nobody’s Selling, Rarest, daily label, style and genre-tag spotlights, notes
 - Collection Map: named islands of records sharing styles, eras, labels and genre tags
 - Made for You: ten playlists a day built from the moods in your notes, countries and decades, Discogs styles, your genre tags, map clusters and labels (reroll with New Mixes, keep one with Save)
-- Smart playlists: rules that fill a playlist by themselves (date added, year, genre, style, your tags, moods from notes, country, label, condition, have / want, copies for sale, price, estimated value, rating…), matching all or any, with order, songs per record and a limit
+- Smart playlists: rules that fill a playlist by themselves (date added, year, genre, style, your tags, moods from notes, country, label, condition, have / want, copies for sale, price, estimated value, rating…), matching all or any. A rule can hold several values (style is House or Tech House), and groups nest an any/all inside another, e.g. style is House or Tech House, fewer than 500 have, and (country France or Belgium). Order, songs per record and a limit
 - Playlists synced across devices through a private GitHub Gist
 - Works on the phone (add to home screen)
 

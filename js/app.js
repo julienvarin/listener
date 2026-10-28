@@ -5,7 +5,7 @@ import { Playlists } from './playlists.js';
 import { icon } from './icons.js';
 import { CollectionMap } from './map.js';
 import { mixes } from './mixes.js';
-import { FIELDS, OPS, ORDERS, blankRule, blankSmart, describe, fieldType, matchReleases, smartItems, suggestions } from './smart.js';
+import { FIELDS, OPS, ORDERS, blankGroup, blankRule, blankSmart, describe, fieldType, isGroup, isMulti, matchReleases, smartItems, suggestions, values } from './smart.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -726,7 +726,11 @@ function smartEditor(p = null) {
   let name = p?.name || 'Smart Playlist';
   const dlg = $('#dialog');
   const opts = (list, val) => list.map(([k, l]) => `<option value="${k}" ${k === val ? 'selected' : ''}>${esc(l)}</option>`).join('');
-  const valueInputs = (x, i) => {
+  // Rules are addressed by their path of indexes from the top group, e.g. "2.0" = first rule of the third item.
+  const at = (path) => path.split('.').filter(Boolean).map(Number).reduce((node, i) => node.rules[i], def);
+  const parentOf = (path) => { const ix = path.split('.').map(Number); return [at(ix.slice(0, -1).join('.')), ix.at(-1)]; };
+  const datalists = new Map();
+  const valueInputs = (x, path) => {
     const type = fieldType(x.f);
     const input = (k, attrs) => `<input data-k="${k}" value="${esc(x[k] ?? '')}" ${attrs}>`;
     if (type === 'number') return input('v', 'type="number" step="any" placeholder="0"') + (x.op === 'between' ? `<span>and</span>${input('v2', 'type="number" step="any"')}` : '');
@@ -734,60 +738,120 @@ function smartEditor(p = null) {
       if (x.op === 'last' || x.op === 'notlast') return `${input('v', 'type="number" min="1" placeholder="6"')}<select data-k="unit">${opts([['days', 'days'], ['weeks', 'weeks'], ['months', 'months'], ['years', 'years']], x.unit || 'months')}</select>`;
       return input('v', 'type="date"') + (x.op === 'between' ? `<span>and</span>${input('v2', 'type="date"')}` : '');
     }
-    const sugg = suggestions(lib, x.f).slice(0, 400);
-    return input('v', `type="text" placeholder="Value" list="sv${i}" autocomplete="off"`) + (sugg.length ? `<datalist id="sv${i}">${sugg.map((v) => `<option value="${esc(v)}">`).join('')}</datalist>` : '');
+    if (!datalists.has(x.f)) datalists.set(x.f, suggestions(lib, x.f).slice(0, 400));
+    const vals = values(x);
+    const neg = x.op === 'not' || x.op === 'lacks';
+    return `<span class="vchips">${vals.map((v, j) => `${j ? `<em>${neg ? 'nor' : 'or'}</em>` : ''}<span class="vchip">${esc(v)}<button type="button" data-chip-rm="${j}" aria-label="Remove ${esc(v)}">×</button></span>`).join('')}
+      <input data-k="add" type="text" placeholder="${vals.length ? 'or…' : 'Value'}" list="sv-${x.f}" autocomplete="off" enterkeyhint="done"></span>`;
   };
+  const ruleRow = (x, path) => `<div class="rule" data-path="${path}">
+      <select data-k="f">${opts(FIELDS.map(([k, l]) => [k, l]), x.f)}</select>
+      <select data-k="op">${opts(OPS[fieldType(x.f)], x.op)}</select>
+      <span class="rule-vals">${valueInputs(x, path)}</span>
+      <button type="button" class="icon-btn" data-rule-rm aria-label="Remove rule">${icon('minus')}</button>
+    </div>`;
+  const groupBox = (g, path, depth) => `<div class="rule-group ${depth ? 'nested' : ''}" data-path="${path}">
+      ${depth ? `<div class="group-head">Match <select data-k="match">${opts([['any', 'any'], ['all', 'all']], g.match)}</select> of:<button type="button" class="icon-btn" data-rule-rm aria-label="Remove group">${icon('minus')}</button></div>` : ''}
+      <div class="rules">${g.rules.map((x, i) => {
+        const sub = path === '' ? String(i) : `${path}.${i}`;
+        return isGroup(x) ? groupBox(x, sub, depth + 1) : ruleRow(x, sub);
+      }).join('')}</div>
+      <div class="group-actions"><button type="button" class="btn" data-rule-add>${icon('plus')}Add Rule</button>${depth < 2 ? `<button type="button" class="btn" data-group-add>${icon('plus')}Add Group</button>` : ''}</div>
+    </div>`;
   const count = () => {
     const rs = matchReleases(lib, def);
     const songs = smartItems(lib, { id: p?.id || 'draft', smart: def }).length;
     $('#smart-count').textContent = `${plural(rs.length, 'record')} match · ${plural(songs, 'song')}`;
+    $('#smart-desc').textContent = describe(def);
   };
-  const draw = () => {
+  const draw = (focus) => {
+    datalists.clear();
+    const body = groupBox(def, '', 0);
     dlg.innerHTML = `<form class="dialog-card" id="smart-form">
       <h2>${p ? 'Edit Smart Playlist' : 'New Smart Playlist'}</h2>
       <input class="dialog-name" data-k="name" value="${esc(name)}" placeholder="Name" aria-label="Name">
-      <p class="dialog-line">Match <select data-k="match">${opts([['all', 'all'], ['any', 'any']], def.match)}</select> of these rules:</p>
-      <div class="rules">${def.rules.map((x, i) => `<div class="rule" data-i="${i}">
-        <select data-k="f">${opts(FIELDS.map(([k, l]) => [k, l]), x.f)}</select>
-        <select data-k="op">${opts(OPS[fieldType(x.f)], x.op)}</select>
-        <span class="rule-vals">${valueInputs(x, i)}</span>
-        <button type="button" class="icon-btn" data-rule-rm="${i}" aria-label="Remove rule">${icon('minus')}</button>
-      </div>`).join('')}</div>
-      <button type="button" class="btn" data-rule-add>${icon('plus')}Add Rule</button>
+      <p class="dialog-line">Match <select data-k="match" data-root>${opts([['all', 'all'], ['any', 'any']], def.match)}</select> of these rules:</p>
+      ${body}
+      ${[...datalists].map(([f, list]) => `<datalist id="sv-${f}">${list.map((v) => `<option value="${esc(v)}">`).join('')}</datalist>`).join('')}
+      <p class="dialog-hint">Several values in one rule match any of them. Add a group to mix “any” and “all”, e.g. style is House <em>or</em> your tag is Deep.</p>
       <div class="dialog-grid">
         <label>Order <select data-k="order">${opts(ORDERS, def.order)}</select></label>
         <label>Songs per record <select data-k="per">${opts([['1', '1'], ['2', '2'], ['3', '3'], ['0', 'All']], String(def.per))}</select></label>
         <label>Limit <input data-k="limit" type="number" min="0" value="${esc(def.limit)}"> <small>songs, 0 = no limit</small></label>
       </div>
+      <p class="dialog-desc" id="smart-desc"></p>
       <p class="dialog-count" id="smart-count"></p>
       <div class="dialog-actions"><button type="button" class="btn" data-dialog-cancel>Cancel</button><button type="submit" class="btn btn-primary">Save</button></div>
     </form>`;
     count();
+    if (focus) $(`[data-path="${focus}"] [data-k="add"]`, dlg)?.focus();
   };
+  const addValue = (input) => {
+    const v = input.value.trim();
+    if (!v) return false;
+    const x = at(input.closest('.rule').dataset.path);
+    x.v = [...values(x), v];
+    input.value = '';
+    return true;
+  };
+  // Returns true when the change needs a redraw (field, operator or group structure changed).
   const read = (el) => {
     const k = el.dataset.k;
-    const row = el.closest('.rule');
-    if (!row) {
+    const holder = el.closest('[data-path]');
+    if (k === 'add') return false;
+    if (!holder || el.hasAttribute('data-root') || ['name', 'order', 'per', 'limit'].includes(k)) {
       if (k === 'name') name = el.value;
       else def[k] = k === 'limit' || k === 'per' ? Number(el.value) || 0 : el.value;
       return false;
     }
-    const x = def.rules[Number(row.dataset.i)];
-    if (k === 'f') { Object.assign(x, { f: el.value, op: OPS[fieldType(el.value)][0][0], v: '', v2: '' }); return true; }
+    const x = at(holder.dataset.path);
+    if (k === 'f') {
+      const multi = isMulti(el.value);
+      Object.assign(x, { f: el.value, op: OPS[fieldType(el.value)][0][0], v: multi ? [] : '', v2: '' });
+      return true;
+    }
     x[k] = el.value;
     return k === 'op';
   };
-  dlg.oninput = (e) => { if (e.target.dataset.k && !read(e.target)) count(); };
-  dlg.onchange = (e) => { if (e.target.dataset.k && read(e.target)) draw(); };
+  dlg.oninput = (e) => {
+    const t = e.target;
+    // Picking a suggestion from the list adds it straight away.
+    if (t.dataset.k === 'add') {
+      if (e.inputType === 'insertReplacementText' || !e.inputType) { if (addValue(t)) draw(t.closest('.rule').dataset.path); }
+      return;
+    }
+    if (t.dataset.k && !read(t)) count();
+  };
+  dlg.onchange = (e) => {
+    const t = e.target;
+    if (t.dataset.k === 'add') { if (addValue(t)) draw(t.closest('.rule').dataset.path); return; }
+    if (t.dataset.k && read(t)) draw();
+  };
+  dlg.onkeydown = (e) => {
+    if (e.key !== 'Enter' || e.target.dataset.k !== 'add') return;
+    e.preventDefault();
+    if (addValue(e.target)) draw(e.target.closest('.rule').dataset.path);
+  };
   dlg.onclick = (e) => {
     const t = e.target;
     if (t === dlg || t.closest('[data-dialog-cancel]')) { dlg.hidden = true; return; }
-    if (t.closest('[data-rule-add]')) { def.rules.push(blankRule()); draw(); return; }
-    const rm = t.closest('[data-rule-rm]');
-    if (rm) { def.rules.splice(Number(rm.dataset.ruleRm), 1); draw(); }
+    const holder = t.closest('[data-path]');
+    if (t.closest('[data-chip-rm]')) {
+      const x = at(t.closest('.rule').dataset.path);
+      x.v = values(x).filter((_, j) => j !== Number(t.closest('[data-chip-rm]').dataset.chipRm));
+      return draw();
+    }
+    if (t.closest('[data-rule-add]')) { at(holder.dataset.path).rules.push(blankRule()); return draw(); }
+    if (t.closest('[data-group-add]')) { at(holder.dataset.path).rules.push(blankGroup()); return draw(); }
+    if (t.closest('[data-rule-rm]')) {
+      const [parent, i] = parentOf(holder.dataset.path);
+      parent.rules.splice(i, 1);
+      return draw();
+    }
   };
   dlg.onsubmit = (e) => {
     e.preventDefault();
+    dlg.querySelectorAll('[data-k="add"]').forEach(addValue);
     dlg.hidden = true;
     if (p) { playlists.updateSmart(p.id, name.trim(), def); render(); }
     else go(`#/playlist/${playlists.create(name.trim() || 'Smart Playlist', [], def).id}`);

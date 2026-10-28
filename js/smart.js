@@ -1,5 +1,7 @@
 // Smart playlists: rules over the collection ("added in 2023", "style is not House", "fewer than 5 for sale"…)
-// that fill a playlist by themselves. The definition syncs with the other playlists; the tracks are worked out
+// that fill a playlist by themselves. A definition is a group: { match: 'all' | 'any', rules: [...] }, where each
+// rule is either a condition { f, op, v, v2, unit } or a nested group. Text and list conditions take several
+// values (v is an array) and match any of them, so "style is House, Tech House" needs no group. The definition syncs with the other playlists; the tracks are worked out
 // on the device, so they follow the collection as it changes.
 
 import { moodsOf } from './mixes.js';
@@ -45,8 +47,14 @@ export const OPS = {
 
 export const ORDERS = [['random', 'Random (new pick daily)'], ['added', 'Recently added'], ['year', 'Oldest first'], ['yeardesc', 'Newest first'], ['value', 'Most valuable'], ['rating', 'Highest rated'], ['want', 'Most wanted']];
 
-export const blankRule = () => ({ f: 'style', op: 'is', v: '' });
+export const blankRule = () => ({ f: 'style', op: 'is', v: [] });
+export const blankGroup = () => ({ match: 'any', rules: [blankRule()] });
 export const blankSmart = () => ({ match: 'all', rules: [blankRule()], order: 'random', limit: 50, per: 2 });
+export const isGroup = (x) => Array.isArray(x?.rules);
+export const isMulti = (f) => ['list', 'text'].includes(FIELD[f]?.[2]);
+
+// Values of a text or list condition; older definitions stored a single string.
+export const values = (x) => (Array.isArray(x.v) ? x.v : x.v ? [x.v] : []).map((v) => String(v).trim()).filter(Boolean);
 
 const low = (s) => String(s ?? '').toLowerCase().trim();
 const num = (v) => (v === '' || v === undefined || v === null ? NaN : Number(v));
@@ -57,16 +65,13 @@ function test(rule, r) {
   if (!field) return true;
   const [, , type, get] = field;
   const raw = get(r);
-  const v = low(rule.v);
   if (type === 'list' || type === 'text') {
     const vals = (Array.isArray(raw) ? raw : [raw]).map(low);
-    if (!v) return true;
-    return {
-      is: () => vals.includes(v),
-      not: () => !vals.includes(v),
-      has: () => vals.some((x) => x.includes(v)),
-      lacks: () => !vals.some((x) => x.includes(v)),
-    }[rule.op]?.() ?? true;
+    const want = values(rule).map(low);
+    if (!want.length) return true;
+    const is = want.some((w) => vals.includes(w));
+    const has = want.some((w) => vals.some((x) => x.includes(w)));
+    return { is, not: !is, has, lacks: !has }[rule.op] ?? true;
   }
   if (type === 'number') {
     const a = num(rule.v), b = num(rule.v2);
@@ -96,10 +101,19 @@ function test(rule, r) {
   return true;
 }
 
+// Conditions with no value yet are left out, and so are groups left empty, so a half-written rule never empties
+// the playlist.
+const active = (x) => (isGroup(x) ? x.rules.some(active) : FIELD[x.f] && (isMulti(x.f) ? values(x).length : x.v !== '' && x.v !== undefined));
+
+function matches(group, r) {
+  const rules = group.rules.filter(active);
+  if (!rules.length) return true;
+  const ok = (x) => (isGroup(x) ? matches(x, r) : test(x, r));
+  return group.match === 'any' ? rules.some(ok) : rules.every(ok);
+}
+
 export function matchReleases(lib, def) {
-  const rules = (def.rules || []).filter((x) => FIELD[x.f]);
-  if (!rules.length) return lib.releases.slice();
-  return lib.releases.filter((r) => (def.match === 'any' ? rules.some((x) => test(x, r)) : rules.every((x) => test(x, r))));
+  return lib.releases.filter((r) => matches(def, r));
 }
 
 function seeded(text) {
@@ -147,15 +161,20 @@ export function smartItems(lib, p) {
   return out.slice(0, limit);
 }
 
-// One line describing the rules, for the playlist header.
-export function describe(def) {
-  const parts = (def.rules || []).filter((x) => FIELD[x.f] && x.v !== '').map((x) => {
+// One line describing the rules, for the playlist header. Nested groups go in parentheses.
+export function describe(def, nested = false) {
+  const parts = def.rules.filter(active).map((x) => {
+    if (isGroup(x)) return describe(x, true);
     const [, label, type] = FIELD[x.f];
     const op = OPS[type].find(([k]) => k === x.op)?.[1] || '';
-    const val = x.op === 'between' ? `${x.v} and ${x.v2 ?? ''}` : (x.op === 'last' || x.op === 'notlast') ? `${x.v} ${x.unit || 'months'}` : x.v;
+    const neg = x.op === 'not' || x.op === 'lacks';
+    const val = isMulti(x.f) ? values(x).join(neg ? ' nor ' : ' or ')
+      : x.op === 'between' ? `${x.v} and ${x.v2 ?? ''}` : (x.op === 'last' || x.op === 'notlast') ? `${x.v} ${x.unit || 'months'}` : x.v;
     return `${label} ${op} ${val}`;
   });
-  return parts.length ? parts.join(def.match === 'any' ? ' or ' : ' · ') : 'Whole collection';
+  if (!parts.length) return nested ? '' : 'Whole collection';
+  const text = parts.join(def.match === 'any' ? ' or ' : ' · ');
+  return nested && parts.length > 1 ? `(${text})` : text;
 }
 
 // Every value a list field takes, most common first, for the value suggestions.
