@@ -39,7 +39,7 @@ To re-curate: `scripts/seed_clusters.py draft` on a local bundle, write a names 
 
 A GitHub Action runs nightly. It fetches the collection from the Discogs API, computes the similarity map, then encrypts everything (AES-GCM, PBKDF2 key from the site password) into `data/library.enc` and deploys the static site to GitHub Pages. The page is public but the data is unreadable without the password.
 
-Each run reuses the previously deployed bundle, so it only fetches new records plus the 500 releases with the oldest marketplace stats. Discogs allows 60 requests a minute per account; price suggestions (a second request per record) are only re-fetched when a record's market stats changed or they're over a month old. For records with no YouTube video it also looks up Apple Music previews (up to 500 lookups a run), so records with nothing to play show grayed out.
+Each run reuses the previously deployed bundle, so it only fetches new records plus the 500 releases with the oldest marketplace stats. Requests are paced to the limit Discogs reports for the token in its `X-Discogs-Ratelimit` header (60 a minute by default) with 4 in flight, so if Discogs raises the limit for your account, builds speed up on their own (`--max-rate` caps it, `--workers` sets the parallelism); price suggestions (a second request per record) are only re-fetched when a record's market stats changed or they're over a month old. For records with no YouTube video it also looks up Apple Music previews (up to 500 lookups a run), so records with nothing to play show grayed out.
 
 ## Setup
 

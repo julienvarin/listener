@@ -3,7 +3,7 @@
 Env: DISCOGS_TOKEN, DISCOGS_USERNAME, LISTENER_PASSWORD, GIST_TOKEN (optional).
 Release details already present in the previous bundle are reused, so only
 new additions plus the stalest market stats (--refresh) hit the per-release
-endpoint (Discogs allows ~60 req/min).
+endpoint, paced to the rate limit Discogs reports for the token (60 req/min unless raised).
 """
 
 import argparse
@@ -14,11 +14,13 @@ import os
 import re
 import struct
 import sys
+import threading
 import time
 import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -59,31 +61,71 @@ def decrypt(blob: bytes, password: str) -> dict:
 
 
 class Discogs:
-    def __init__(self, token: str):
+    """Discogs API client that paces itself to the limit Discogs reports.
+
+    Every response carries X-Discogs-Ratelimit (requests a minute allowed for this token, 60 by default) and
+    X-Discogs-Ratelimit-Remaining. Requests are spaced to the reported limit, so a raised limit is used as soon
+    as Discogs grants it, and several worker threads keep requests in flight so network latency doesn't cap
+    the rate below it. `max_rate` optionally caps requests a minute below what Discogs allows.
+    """
+
+    def __init__(self, token: str, max_rate: float = 0):
         self.headers = {"Authorization": f"Discogs token={token}", "User-Agent": "listener/1.0"}
-        self.last = 0.0
+        self.limit = 60
+        self.max_rate = max_rate
+        self.next_at = 0.0
+        self.lock = threading.Lock()
+
+    def interval(self) -> float:
+        rate = min(self.limit, self.max_rate) if self.max_rate else self.limit
+        return 60 / (rate * 0.95)  # a little under the limit, since its window and our clock differ
+
+    def pace(self) -> None:
+        with self.lock:
+            now = time.monotonic()
+            slot = max(now, self.next_at)
+            self.next_at = slot + self.interval()
+        if slot > now:
+            time.sleep(slot - now)
+
+    def hold(self, seconds: float) -> None:
+        with self.lock:
+            self.next_at = max(self.next_at, time.monotonic() + seconds)
 
     def get(self, path: str) -> dict:
         for attempt in range(6):
-            wait = 1.05 - (time.monotonic() - self.last)
-            if wait > 0:
-                time.sleep(wait)
-            self.last = time.monotonic()
+            self.pace()
             req = urllib.request.Request(API + path, headers=self.headers)
             try:
                 with urllib.request.urlopen(req, timeout=30) as r:
-                    if int(r.headers.get("X-Discogs-Ratelimit-Remaining", 60)) < 5:
-                        time.sleep(10)
+                    limit = int(r.headers.get("X-Discogs-Ratelimit") or 0)
+                    if limit and limit != self.limit:
+                        print(f"Discogs rate limit for this token: {limit} requests a minute", file=sys.stderr)
+                        self.limit = limit
+                    if int(r.headers.get("X-Discogs-Ratelimit-Remaining") or self.limit) < 3:
+                        self.hold(5)
                     return json.load(r)
             except urllib.error.HTTPError as e:
                 if e.code == 404:
                     return {}
                 if e.code not in (429, 500, 502, 503, 504):
                     raise
+                self.hold(10 * (attempt + 1))
             except (urllib.error.URLError, TimeoutError):
-                pass
-            time.sleep(10 * (attempt + 1))
+                self.hold(5 * (attempt + 1))
         raise RuntimeError(f"giving up on {path}")
+
+    def get_all(self, items: list, path_of, workers: int):
+        """Fetch path_of(item) for every item on `workers` threads; yields (item, response, error) in order."""
+
+        def one(item):
+            try:
+                return item, self.get(path_of(item)), None
+            except (RuntimeError, urllib.error.HTTPError) as e:
+                return item, None, e
+
+        with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+            yield from pool.map(one, items)
 
 
 def names(items: list) -> list:
@@ -280,6 +322,8 @@ def main() -> None:
     ap.add_argument("--refresh", type=int, default=250, help="re-fetch market stats for this many stalest releases")
     ap.add_argument("--apple", type=int, default=500, help="max Apple preview lookups this run")
     ap.add_argument("--spotify", type=int, default=1000, help="max Spotify track lookups this run")
+    ap.add_argument("--workers", type=int, default=4, help="Discogs requests in flight at once")
+    ap.add_argument("--max-rate", type=float, default=0, help="cap on Discogs requests a minute (0 = whatever Discogs allows)")
     ap.add_argument("--no-suggestions", action="store_true", help="skip Discogs price suggestions")
     ap.add_argument("--seed", default="data/clusters.enc", help="curated clusters, decrypted with CLUSTER_KEY")
     args = ap.parse_args()
@@ -303,7 +347,7 @@ def main() -> None:
         except Exception as e:
             print(f"previous bundle unreadable ({e}); starting fresh", file=sys.stderr)
 
-    api = Discogs(token)
+    api = Discogs(token, args.max_rate)
     fields = {f["id"]: f["name"] for f in api.get(f"/users/{user}/collection/fields").get("fields", [])}
     releases, seen, page = [], {}, 1
     while True:
@@ -357,11 +401,11 @@ def main() -> None:
     print(f"fetching {len(todo)} releases ({len(todo) - len(refresh & {r['id'] for r in todo})} new)", file=sys.stderr)
 
     fetched = 0
-    for r in todo:
-        try:
-            release = api.get(f"/releases/{r['id']}?curr_abbr=EUR")
-        except RuntimeError as e:
-            print(f"  skipped {r['id']}: {e}", file=sys.stderr)
+    for r, release, err in api.get_all(todo, lambda r: f"/releases/{r['id']}?curr_abbr=EUR", args.workers):
+        if isinstance(err, urllib.error.HTTPError):
+            raise err
+        if err:
+            print(f"  skipped {r['id']}: {err}", file=sys.stderr)
             continue
         if release:
             r.update(details(release))
@@ -385,14 +429,11 @@ def main() -> None:
     if args.limit:
         pending = pending[: args.limit]
     print(f"fetching price suggestions for {len(pending)} releases", file=sys.stderr)
-    for n, r in enumerate(pending, 1):
-        try:
-            suggest = api.get(f"/marketplace/price_suggestions/{r['id']}")
-        except urllib.error.HTTPError:
-            suggest = {}
-        except RuntimeError as e:
-            print(f"  skipped suggestions for {r['id']}: {e}", file=sys.stderr)
+    for n, (r, suggest, err) in enumerate(api.get_all(pending, lambda r: f"/marketplace/price_suggestions/{r['id']}", args.workers), 1):
+        if isinstance(err, RuntimeError):
+            print(f"  skipped suggestions for {r['id']}: {err}", file=sys.stderr)
             continue
+        suggest = suggest or {}
         r["suggest"] = {k: round(v["value"], 2) for k, v in suggest.items() if isinstance(v, dict) and v.get("value")}
         r["suggest_at"] = datetime.now(timezone.utc).date().isoformat()
         if n % 100 == 0:
