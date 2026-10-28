@@ -19,7 +19,7 @@ import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from cryptography.hazmat.primitives import hashes
@@ -345,7 +345,7 @@ def main() -> None:
     for r in releases:
         if r["id"] in cache:
             r.update({k: cache[r["id"]][k] for k in DETAIL_KEYS})
-            for k in ("suggest", "hist"):
+            for k in ("suggest", "suggest_at", "hist"):
                 if k in cache[r["id"]]:
                     r[k] = cache[r["id"]][k]
             if "hist" not in r:
@@ -370,7 +370,18 @@ def main() -> None:
             print(f"  fetched {fetched}/{len(todo)}", file=sys.stderr)
             save()
     # Discogs price suggestions: per-condition values derived from the release's sales history.
-    pending = [] if args.no_suggestions else [r for r in releases if "suggest" not in r or r["id"] in refresh]
+    # Suggestions follow sales history, which moves slowly: on a refresh, only re-fetch them when the market
+    # stats changed or they are over a month old. That roughly halves the requests per refreshed record.
+    month_ago = (datetime.now(timezone.utc) - timedelta(days=30)).date().isoformat()
+
+    def moved(r: dict) -> bool:
+        old = cache.get(r["id"], {})
+        return any(old.get(k) != r.get(k) for k in ("lowest_price", "for_sale", "have", "want"))
+
+    pending = [] if args.no_suggestions else [
+        r for r in releases
+        if "suggest" not in r or (r["id"] in refresh and (moved(r) or r.get("suggest_at", "") < month_ago))
+    ]
     if args.limit:
         pending = pending[: args.limit]
     print(f"fetching price suggestions for {len(pending)} releases", file=sys.stderr)
@@ -383,6 +394,7 @@ def main() -> None:
             print(f"  skipped suggestions for {r['id']}: {e}", file=sys.stderr)
             continue
         r["suggest"] = {k: round(v["value"], 2) for k, v in suggest.items() if isinstance(v, dict) and v.get("value")}
+        r["suggest_at"] = datetime.now(timezone.utc).date().isoformat()
         if n % 100 == 0:
             print(f"  suggestions {n}/{len(pending)}", file=sys.stderr)
             save()
