@@ -5,6 +5,7 @@ import { Playlists } from './playlists.js';
 import { icon } from './icons.js';
 import { CollectionMap } from './map.js';
 import { mixes } from './mixes.js';
+import { FIELDS, OPS, ORDERS, blankRule, blankSmart, describe, fieldType, matchReleases, smartItems, suggestions } from './smart.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -174,8 +175,9 @@ function renderSidebar() {
       <h6>Library</h6>
       ${NAV.map(([id, label, ic]) => `<a href="#/${id}" data-nav="${id}">${icon(ic)}<span>${label}</span></a>`).join('')}
       <h6>Playlists <button class="icon-btn" data-action="new-playlist" title="New Playlist">${icon('plus')}</button></h6>
-      <a href="#/playlists" data-nav="playlists">${icon('sparkles')}<span>Made for You</span></a>
-      ${playlists.all.map((p) => `<a href="#/playlist/${p.id}" data-nav="playlist:${p.id}" data-drop-playlist="${p.id}">${icon('playlist')}<span>${esc(p.name)}</span></a>`).join('')}
+      <a href="#/playlists" data-nav="playlists">${icon('grid')}<span>Made for You</span></a>
+      <button class="side-link" data-action="new-smart">${icon('plus')}<span>New Smart Playlist</span></button>
+      ${playlists.all.map((p) => `<a href="#/playlist/${p.id}" data-nav="playlist:${p.id}" data-drop-playlist="${p.id}">${icon(p.smart ? 'sparkles' : 'playlist')}<span>${esc(p.name)}</span></a>`).join('')}
       ${playlists.all.length ? '' : '<p class="side-empty">Create a playlist with + or from any track’s ••• menu.</p>'}
     </nav>
     <footer class="side-foot">
@@ -713,7 +715,86 @@ function mapView(r) {
 /* ---------- playlists ---------- */
 
 function playlistItems(p) {
+  if (p.smart) return smartItems(lib, p);
   return p.items.map(({ rid, key }) => lib.item(rid, key)).filter(Boolean);
+}
+
+/* ---------- smart playlist editor ---------- */
+
+function smartEditor(p = null) {
+  const def = structuredClone(p?.smart || blankSmart());
+  let name = p?.name || 'Smart Playlist';
+  const dlg = $('#dialog');
+  const opts = (list, val) => list.map(([k, l]) => `<option value="${k}" ${k === val ? 'selected' : ''}>${esc(l)}</option>`).join('');
+  const valueInputs = (x, i) => {
+    const type = fieldType(x.f);
+    const input = (k, attrs) => `<input data-k="${k}" value="${esc(x[k] ?? '')}" ${attrs}>`;
+    if (type === 'number') return input('v', 'type="number" step="any" placeholder="0"') + (x.op === 'between' ? `<span>and</span>${input('v2', 'type="number" step="any"')}` : '');
+    if (type === 'date') {
+      if (x.op === 'last' || x.op === 'notlast') return `${input('v', 'type="number" min="1" placeholder="6"')}<select data-k="unit">${opts([['days', 'days'], ['weeks', 'weeks'], ['months', 'months'], ['years', 'years']], x.unit || 'months')}</select>`;
+      return input('v', 'type="date"') + (x.op === 'between' ? `<span>and</span>${input('v2', 'type="date"')}` : '');
+    }
+    const sugg = suggestions(lib, x.f).slice(0, 400);
+    return input('v', `type="text" placeholder="Value" list="sv${i}" autocomplete="off"`) + (sugg.length ? `<datalist id="sv${i}">${sugg.map((v) => `<option value="${esc(v)}">`).join('')}</datalist>` : '');
+  };
+  const count = () => {
+    const rs = matchReleases(lib, def);
+    const songs = smartItems(lib, { id: p?.id || 'draft', smart: def }).length;
+    $('#smart-count').textContent = `${plural(rs.length, 'record')} match · ${plural(songs, 'song')}`;
+  };
+  const draw = () => {
+    dlg.innerHTML = `<form class="dialog-card" id="smart-form">
+      <h2>${p ? 'Edit Smart Playlist' : 'New Smart Playlist'}</h2>
+      <input class="dialog-name" data-k="name" value="${esc(name)}" placeholder="Name" aria-label="Name">
+      <p class="dialog-line">Match <select data-k="match">${opts([['all', 'all'], ['any', 'any']], def.match)}</select> of these rules:</p>
+      <div class="rules">${def.rules.map((x, i) => `<div class="rule" data-i="${i}">
+        <select data-k="f">${opts(FIELDS.map(([k, l]) => [k, l]), x.f)}</select>
+        <select data-k="op">${opts(OPS[fieldType(x.f)], x.op)}</select>
+        <span class="rule-vals">${valueInputs(x, i)}</span>
+        <button type="button" class="icon-btn" data-rule-rm="${i}" aria-label="Remove rule">${icon('minus')}</button>
+      </div>`).join('')}</div>
+      <button type="button" class="btn" data-rule-add>${icon('plus')}Add Rule</button>
+      <div class="dialog-grid">
+        <label>Order <select data-k="order">${opts(ORDERS, def.order)}</select></label>
+        <label>Songs per record <select data-k="per">${opts([['1', '1'], ['2', '2'], ['3', '3'], ['0', 'All']], String(def.per))}</select></label>
+        <label>Limit <input data-k="limit" type="number" min="0" value="${esc(def.limit)}"> <small>songs, 0 = no limit</small></label>
+      </div>
+      <p class="dialog-count" id="smart-count"></p>
+      <div class="dialog-actions"><button type="button" class="btn" data-dialog-cancel>Cancel</button><button type="submit" class="btn btn-primary">Save</button></div>
+    </form>`;
+    count();
+  };
+  const read = (el) => {
+    const k = el.dataset.k;
+    const row = el.closest('.rule');
+    if (!row) {
+      if (k === 'name') name = el.value;
+      else def[k] = k === 'limit' || k === 'per' ? Number(el.value) || 0 : el.value;
+      return false;
+    }
+    const x = def.rules[Number(row.dataset.i)];
+    if (k === 'f') { Object.assign(x, { f: el.value, op: OPS[fieldType(el.value)][0][0], v: '', v2: '' }); return true; }
+    x[k] = el.value;
+    return k === 'op';
+  };
+  dlg.oninput = (e) => { if (e.target.dataset.k && !read(e.target)) count(); };
+  dlg.onchange = (e) => { if (e.target.dataset.k && read(e.target)) draw(); };
+  dlg.onclick = (e) => {
+    const t = e.target;
+    if (t === dlg || t.closest('[data-dialog-cancel]')) { dlg.hidden = true; return; }
+    if (t.closest('[data-rule-add]')) { def.rules.push(blankRule()); draw(); return; }
+    const rm = t.closest('[data-rule-rm]');
+    if (rm) { def.rules.splice(Number(rm.dataset.ruleRm), 1); draw(); }
+  };
+  dlg.onsubmit = (e) => {
+    e.preventDefault();
+    dlg.hidden = true;
+    if (p) { playlists.updateSmart(p.id, name.trim(), def); render(); }
+    else go(`#/playlist/${playlists.create(name.trim() || 'Smart Playlist', [], def).id}`);
+  };
+  draw();
+  dlg.hidden = false;
+  $('.dialog-name', dlg).focus();
 }
 
 function mosaic(items, cls) {
@@ -779,11 +860,12 @@ function playlistsView() {
     <p class="shelf-sub">${playlists.token ? 'Synced across your devices with a private GitHub Gist.' : 'Saved on this device.'}</p>
     <div class="grid">
       <button class="card card-new" data-action="new-playlist"><span class="card-art art-empty">${icon('plus')}</span><span class="card-title">New Playlist</span></button>
+      <button class="card card-new" data-action="new-smart"><span class="card-art art-empty">${icon('sparkles')}</span><span class="card-title">New Smart Playlist</span><span class="card-sub">Rules pick the songs</span></button>
       ${playlists.all.map((p) => {
         const items = playlistItems(p);
         return `<div class="card"><div class="card-cover"><a class="card-art" href="#/playlist/${p.id}">${mosaic(items, '')}</a>
           <button class="card-play" data-play-playlist="${p.id}" aria-label="Play">${icon('play')}</button></div>
-          <a class="card-title" href="#/playlist/${p.id}">${esc(p.name)}</a><span class="card-sub">${plural(items.length, 'song')}</span></div>`;
+          <a class="card-title" href="#/playlist/${p.id}">${esc(p.name)}</a><span class="card-sub">${p.smart ? 'Smart · ' : ''}${plural(items.length, 'song')}</span></div>`;
       }).join('')}
     </div>`;
 }
@@ -797,17 +879,21 @@ function playlistView(p) {
     <section class="album-hero">
       ${mosaic(items, 'album-art')}
       <div class="album-info">
-        <p class="kicker">Playlist</p>
+        <p class="kicker">${p.smart ? 'Smart Playlist' : 'Playlist'}</p>
         <h1>${esc(p.name)}</h1>
         <p class="album-meta">${plural(items.length, 'song')}</p>
+        ${p.smart ? `<p class="smart-rules">${esc(describe(p.smart))}</p>` : ''}
         <div class="head-actions">
           <button class="btn btn-primary" data-play-playlist="${p.id}" ${items.length ? '' : 'disabled'}>${icon('play')}Play</button>
           <button class="btn" data-play-playlist="${p.id}" data-shuffle ${items.length ? '' : 'disabled'}>${icon('shuffle')}Shuffle</button>
+          ${p.smart ? `<button class="btn" data-edit-smart="${p.id}">${icon('pencil')}Edit Rules</button>` : ''}
           <button class="icon-btn round" data-more-playlist="${p.id}" aria-label="More">${icon('more')}</button>
         </div>
       </div>
     </section>
-    <div class="tracks" data-sortable="${p.id}">${items.length ? trackRows(items, { list, covers: true, playlistId: p.id }) : '<p class="foot-note">Add songs from any album with the ••• button.</p>'}</div>`;
+    ${p.smart
+      ? `<div class="tracks">${items.length ? trackRows(items, { list, covers: true }) : '<p class="foot-note">Nothing matches these rules yet. Try Edit Rules.</p>'}</div>`
+      : `<div class="tracks" data-sortable="${p.id}">${items.length ? trackRows(items, { list, covers: true, playlistId: p.id }) : '<p class="foot-note">Add songs from any album with the ••• button.</p>'}</div>`}`;
 }
 
 /* ---------- search ---------- */
@@ -1020,7 +1106,7 @@ function addToPlaylistEntry(items) {
     label: 'Add to Playlist',
     submenu: [
       { label: 'New Playlist…', run: () => newPlaylist(items) },
-      ...playlists.all.map((p) => ({ label: p.name, run: () => { playlists.add(p.id, items); toast(`Added to ${p.name}`); } })),
+      ...playlists.all.filter((p) => !p.smart).map((p) => ({ label: p.name, run: () => { playlists.add(p.id, items); toast(`Added to ${p.name}`); } })),
     ],
   };
 }
@@ -1121,6 +1207,7 @@ function bindGlobal() {
     if ((x = el('[data-more-playlist]'))) {
       const p = playlists.get(x.dataset.morePlaylist);
       return openMenu(x, [
+        ...(p.smart ? [{ label: 'Edit Rules…', icon: 'sparkles', run: () => smartEditor(p) }] : []),
         { label: 'Rename…', icon: 'pencil', run: () => { const n = prompt('Rename playlist', p.name); if (n) playlists.rename(p.id, n.trim()); } },
         { label: 'Delete Playlist', icon: 'close', danger: true, run: () => { if (confirm(`Delete “${p.name}”?`)) { playlists.remove(p.id); go('#/playlists'); } } },
       ]);
@@ -1137,6 +1224,7 @@ function bindGlobal() {
       toast(`Saved “${m.name}” to your playlists`);
       return go(`#/playlist/${p.id}`);
     }
+    if ((x = el('[data-edit-smart]'))) return smartEditor(playlists.get(x.dataset.editSmart));
     if ((x = el('[data-play-playlist]'))) {
       e.preventDefault();
       const items = playlistItems(playlists.get(x.dataset.playPlaylist));
@@ -1166,6 +1254,7 @@ function bindGlobal() {
         'shuffle-rediscover': () => playReleases(shelves()[0].list, true),
         'shuffle-view': () => playReleases(viewReleases, true),
         'new-playlist': () => newPlaylist(),
+        'new-smart': () => smartEditor(),
         'reroll-mixes': () => {
           try { localStorage.setItem(MIX_TURN, JSON.stringify({ day: new Date().toISOString().slice(0, 10), turn: mixTurn() + 1 })); } catch {}
           render();
@@ -1206,6 +1295,7 @@ function bindGlobal() {
     } else if (e.key === 'Escape') {
       $('#menu').hidden = true;
       $('#sheet').hidden = true;
+      $('#dialog').hidden = true;
       if (typing) document.activeElement.blur();
     } else if (typing) {
       return;

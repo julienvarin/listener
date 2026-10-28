@@ -114,11 +114,20 @@ export class Playlists extends EventTarget {
     this.timer = setTimeout(() => this.push(), 1200);
   }
 
-  create(name, items = []) {
+  // A smart playlist carries its rules in `smart` and no items: its tracks are computed from the rules.
+  create(name, items = [], smart = null) {
     const p = { id: uid(), name: name || 'Untitled Playlist', created: Date.now(), items: items.map(({ rid, key }) => ({ rid, key })) };
+    if (smart) p.smart = smart;
     this.state.playlists.push(p);
     this.commit();
     return p;
+  }
+
+  updateSmart(id, name, smart) {
+    const p = this.get(id);
+    if (!p) return;
+    Object.assign(p, { name: name || p.name, smart });
+    this.commit();
   }
 
   rename(id, name) { const p = this.get(id); if (p && name) { p.name = name; this.commit(); } }

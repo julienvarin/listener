@@ -622,3 +622,35 @@ img { display: block; }
 .card.silent .card-title, .card.silent .card-sub { color: var(--text3, var(--text2)); }
 .feature.silent .card-play { display: none; }
 .row.unavailable { opacity: 0.45; }
+
+/* ---------- smart playlists ---------- */
+.side-link { display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 10px; border-radius: 8px; font-size: 14px; color: var(--text2); text-align: left; }
+.side-link .i { color: var(--text3); }
+.side-link:hover { background: var(--fill); }
+.smart-rules { margin: 4px 0 0; font-size: 13px; color: var(--text2); }
+.dialog { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 16px; background: rgba(0, 0, 0, 0.32); }
+.dialog[hidden] { display: none; }
+.dialog-card { width: min(760px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; padding: 22px; border-radius: 16px; background: var(--bg); box-shadow: var(--shadow-lg); display: flex; flex-direction: column; gap: 12px; }
+.dialog-card h2 { margin: 0; font-size: 20px; }
+.dialog-card select, .dialog-card input { font: inherit; color: var(--text); background: var(--bg2); border: 1px solid var(--sep); border-radius: 8px; padding: 6px 8px; min-width: 0; }
+.dialog-name { font-size: 17px !important; font-weight: 600; padding: 9px 12px !important; }
+.dialog-line { margin: 0; }
+.rules { display: flex; flex-direction: column; gap: 8px; }
+.rule { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1.6fr) auto; gap: 8px; align-items: center; }
+.rule-vals { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.rule-vals input, .rule-vals select { flex: 1; width: 100%; }
+.rule-vals span { color: var(--text2); }
+.dialog-card > .btn { align-self: flex-start; }
+.dialog-grid { display: flex; flex-wrap: wrap; gap: 10px 18px; padding-top: 6px; border-top: 1px solid var(--sep); }
+.dialog-grid label { display: flex; align-items: center; gap: 8px; color: var(--text2); }
+.dialog-grid input { width: 70px; }
+.dialog-count { margin: 0; font-weight: 600; color: var(--accent); }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+@media (max-width: 760px) {
+  .dialog { padding: 0; place-items: end stretch; }
+  .dialog-card { width: 100%; max-height: 92vh; border-radius: 16px 16px 0 0; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); }
+  .rule { grid-template-columns: 1fr 1fr auto; padding-bottom: 8px; border-bottom: 1px solid var(--sep); }
+  .rule-vals { grid-column: 1 / 3; grid-row: 2; }
+  .rule .icon-btn { grid-row: 1; grid-column: 3; }
+  .dialog-card select, .dialog-card input { font-size: 16px; }
+}
