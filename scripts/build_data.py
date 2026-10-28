@@ -193,6 +193,15 @@ def add_apple(releases: list, cache: dict, budget: int) -> None:
         budget -= len(found)
 
 
+HISTORY = 24
+
+
+def add_history(r: dict) -> None:
+    point = [r["stats_at"], r.get("lowest_price"), r.get("for_sale", 0), (r.get("suggest") or {}).get("Very Good Plus (VG+)")]
+    hist = [h for h in r.get("hist", []) if h[0] != point[0]]
+    r["hist"] = (hist + [point])[-HISTORY:]
+
+
 DETAIL_KEYS = ("country", "released", "tracks", "videos", "have", "want", "community_rating", "votes", "lowest_price", "for_sale", "stats_at")
 
 
@@ -267,8 +276,11 @@ def main() -> None:
     for r in releases:
         if r["id"] in cache:
             r.update({k: cache[r["id"]][k] for k in DETAIL_KEYS})
-            if "suggest" in cache[r["id"]]:
-                r["suggest"] = cache[r["id"]]["suggest"]
+            for k in ("suggest", "hist"):
+                if k in cache[r["id"]]:
+                    r[k] = cache[r["id"]][k]
+            if "hist" not in r:
+                add_history(r)  # seed with the cached snapshot before it is refreshed
         if r["id"] not in cache or r["id"] in refresh:
             todo.append(r)
     if args.limit:
@@ -305,6 +317,12 @@ def main() -> None:
         if n % 100 == 0:
             print(f"  suggestions {n}/{len(pending)}", file=sys.stderr)
             save()
+
+    # Price history: one point per refresh, so the app can tell rising records from falling ones.
+    fetched_ids = {r["id"] for r in todo}
+    for r in releases:
+        if "stats_at" in r and (r["id"] in fetched_ids or "hist" not in r):
+            add_history(r)
 
     try:
         value = api.get(f"/users/{user}/collection/value")

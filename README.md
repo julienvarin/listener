@@ -11,12 +11,12 @@ An Apple Music–style player for my Discogs collection. Audio comes from the Yo
 
 ## Estimated value
 
-Each record's value blends recent sales with the current marketplace (`js/value.js`):
+Each record shows a single estimated value next to the lowest price (`js/value.js`):
 
 - **Recent sales:** Discogs price suggestions at VG+ (derived from the release's sales history).
-- **Marketplace:** the cheapest listing compared to what's normal for that many copies. A lone listing usually sits around 2× recent sales, and the cheapest of 10+ copies around 0.6×, with a €2.50 floor. The ratio is the "heat".
-- More listings make the marketplace count more. A lone overpriced copy barely moves the estimate, and a cheapest copy far below recent sales is treated as likely worn.
-- **Trends:** Heating up (even the cheapest copies sit well above normal), Cooling (copies listed below normal), Scarce (nobody selling, many want it).
+- **Marketplace:** the cheapest listing compared to what's normal for that many copies (a lone listing usually sits around 2× recent sales, the cheapest of 10+ copies around 0.6×). Listings are asking prices, so what they add on top of recent sales is discounted.
+- **History:** every refresh stores a price point. A record that has been going up is assumed to keep rising for a while (and falling records keep falling), capped at +35% / −20%.
+- **Scarcity:** wanted and nobody selling adds a premium that grows with demand and with how long no copy has been listed.
 - **Your copy:** if your Discogs notes have a Media Condition, the estimate is scaled to that grade.
 
 The collection total is compared against Discogs' own collection value (min / median / max).

@@ -520,7 +520,6 @@ function albumView(r) {
     ${extras.length ? `<h2 class="section-title">${tracks.length ? 'Other Videos' : 'Videos'}</h2><div class="tracks">${trackRows(extras, { numbered: false })}</div>` : ''}
     ${!tracks.length && !extras.length ? `<p class="foot-note">${r.stats_at ? 'No tracklist on Discogs for this release.' : 'Tracks for this record load with the next library build.'}</p>` : ''}
     ${statsStrip(r)}
-    ${valueCard(r)}
     <dl class="album-facts">
       ${r.labels.map((l) => `<div><dt>Label</dt><dd><a href="#/label/${enc(l.name)}">${esc(l.name)}</a> — ${esc(l.catno)}</dd></div>`).join('')}
       ${r.country ? `<div><dt>Country</dt><dd>${esc(r.country)}</dd></div>` : ''}
@@ -551,24 +550,14 @@ function statsStrip(r) {
     [r.votes ? `${r.community_rating.toFixed(2)}` : '–', r.votes ? `Rating · ${r.votes} votes` : 'Rating'],
     [r.lowest_price ? euro(r.lowest_price) : '–', r.for_sale ? `Lowest of ${r.for_sale} for sale` : 'None for sale'],
   ];
+  const e = r.est;
+  if (e) {
+    const arrow = { Rising: ' ↑', 'Heating up': ' ↑', Falling: ' ↓' }[e.trend] || '';
+    const grade = e.own?.match(/\(([^)]+)\)/)?.[1];
+    cells.push([`${euro(r.worth)}${arrow}`, grade ? `Est. value · your ${grade}` : 'Est. value']);
+  }
   return `<div class="stats">${cells.map(([v, l]) => `<div><b>${v}</b><span>${l}</span></div>`).join('')}</div>
     ${r.stats_at ? `<p class="stats-note">Marketplace data from ${new Date(r.stats_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</p>` : ''}`;
-}
-
-const GRADES = [['Mint (M)', 'M'], ['Near Mint (NM or M-)', 'NM'], ['Very Good Plus (VG+)', 'VG+'], ['Very Good (VG)', 'VG'], ['Good Plus (G+)', 'G+'], ['Good (G)', 'G']];
-
-function valueCard(r) {
-  const e = r.est;
-  if (!e) return '';
-  const grades = GRADES.filter(([k]) => e.grades[k]);
-  return `<section class="value-card">
-    <div class="value-head">
-      <div><p class="kicker">Estimated value</p><b class="value-num">${euro(e.value)}</b></div>
-      <div class="value-tags">${e.trend ? `<span class="trend trend-${e.trend.split(' ')[0].toLowerCase()}">${e.trend}</span>` : ''}<span class="conf">${e.confidence} confidence</span></div>
-    </div>
-    <ul class="value-why">${e.why.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>
-    ${grades.length ? `<p class="value-grades"><span>Recent sales by condition</span>${grades.map(([k, l]) => `<em>${l}</em> ${euro(e.grades[k])}`).join(' · ')}</p>` : ''}
-  </section>`;
 }
 
 /* ---------- discover ---------- */
@@ -628,9 +617,10 @@ function shelves() {
     sub: 'Estimated from recent sales and listings.',
     badge: (r) => `≈ ${euro(r.worth)}${r.est.trend ? ` · ${r.est.trend}` : ''}`,
   });
-  add('heating', 'Heating Up', mixTop(rs.filter((r) => r.est?.trend === 'Heating up').sort((a, b) => b.est.heat - a.est.heat), rand), {
-    sub: 'Listed well above recent sales.',
-    badge: (r) => `≈ ${euro(r.worth)} · ${r.for_sale} for sale from ${euro(r.lowest_price)}`,
+  const rising = (r) => (r.est.growth ?? 0) * 4 + (r.est.heat ?? 0);
+  add('heating', 'Heating Up', mixTop(rs.filter((r) => ['Rising', 'Heating up'].includes(r.est?.trend)).sort((a, b) => rising(b) - rising(a)), rand), {
+    sub: 'Going up, or listed well above recent sales.',
+    badge: (r) => `≈ ${euro(r.worth)}${r.est.growth >= 0.15 ? ` · +${Math.round(r.est.growth * 100)}% a year` : ` · ${r.for_sale} for sale from ${euro(r.lowest_price)}`}`,
   });
   add('notforsale', 'Nobody’s Selling', mixTop(stats.filter((r) => !r.for_sale && r.want >= 10).sort(SORTS.want[1]), rand), {
     sub: 'Wanted, none for sale.', badge: (r) => `${r.want} want · 0 for sale`,

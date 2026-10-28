@@ -58,7 +58,7 @@ export class Library {
     for (const r of this.releases) {
       r.score = r.votes ? (r.votes * r.community_rating + 10 * mean) / (r.votes + 10) : 0;
       r.ratioScore = r.have !== undefined ? r.want / (r.have + 20) : 0;
-      r.est = estimateValue(r, euro);
+      r.est = estimateValue(r);
       r.worth = r.est ? (r.est.ownValue ?? r.est.value) : 0;
     }
     const valued = this.releases.filter((r) => r.est);
