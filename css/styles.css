@@ -142,6 +142,7 @@ img { display: block; }
 .lcd-sub { font-size: 12px; color: var(--text2); }
 .lcd-sub a:hover { color: var(--accent); }
 .lcd-src { position: absolute; top: 4px; right: 8px; font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text3); }
+.ad-flag { color: #fff; background: #b25e00; padding: 1px 5px; border-radius: 4px; font-weight: 700; }
 .lcd-progress { position: absolute; left: 46px; right: 0; bottom: 0; display: flex; align-items: center; gap: 6px; height: 12px; }
 .lcd-progress .t-cur, .lcd-progress .t-dur { display: none; }
 .scrub {

@@ -44,6 +44,7 @@ export class Player extends EventTarget {
       });
     }));
     setInterval(() => this.source === 'yt' && this.playing && this.emit('time'), 250);
+    setInterval(() => this.watchAd(), 500);
     this.mediaSession();
   }
 
@@ -126,6 +127,7 @@ export class Player extends EventTarget {
       this.source = 'yt';
       const yt = await this.ytReady;
       if (token !== this.loadToken) return;
+      Object.assign(this, { held: false, clock: -1, moved: Date.now() });
       yt.loadVideoById(item.yt);
       return;
     }
@@ -146,7 +148,25 @@ export class Player extends EventTarget {
     this.emit('track');
   }
 
+  // Ads play inside the YouTube iframe, and the API doesn't report them. What it does show: the player
+  // says it is playing or buffering, yet the song's own clock stands still. While that lasts, mute.
+  watchAd() {
+    if (this.source !== 'yt' || !this.yt?.getCurrentTime || this.held) return this.setAd(false);
+    const t = this.yt.getCurrentTime();
+    if (t !== this.clock) { this.clock = t; this.moved = Date.now(); return this.setAd(false); }
+    if (Date.now() - this.moved > 3000 && [-1, 1, 3].includes(this.yt.getPlayerState())) this.setAd(true);
+  }
+
+  setAd(on) {
+    if (this.ad === on || (!on && this.ad === undefined)) return;
+    this.ad = on;
+    if (on) this.yt.mute();
+    else { this.yt?.unMute?.(); this.yt?.setVolume?.(this.volume * 100); }
+    this.emit('ad');
+  }
+
   stopAll() {
+    this.setAd(false);
     this.audio.pause();
     this.audio.removeAttribute('src');
     try { this.yt?.stopVideo?.(); } catch {}
@@ -208,12 +228,15 @@ export class Player extends EventTarget {
   }
 
   resume() {
+    this.held = false;
+    this.moved = Date.now();
     if (this.source === 'yt') this.yt.playVideo();
     else if (this.source === 'apple') this.audio.play();
     else if (this.current) this.load();
   }
 
   pause() {
+    this.held = true;
     if (this.source === 'yt') this.yt.pauseVideo();
     else if (this.source === 'apple') this.audio.pause();
   }

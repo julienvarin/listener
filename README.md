@@ -21,6 +21,12 @@ Each record shows a single estimated value next to the lowest price (`js/value.j
 
 The collection total is compared against Discogs' own collection value (min / median / max).
 
+## YouTube ads
+
+Ads play inside YouTube's embedded player and the API doesn't report them. The app spots one when YouTube says it's playing but the song's clock doesn't move, mutes it, and shows **Ad · muted** until the song starts.
+
+YouTube Premium removes embed ads only if the embedded player can see your YouTube login. That's a cross-site cookie, which Safari blocks by default (Settings → Apps → Safari → Prevent Cross-Site Tracking). Turning that off makes Premium work here, but it applies to every site.
+
 ## Curated clusters
 
 The Collection Map groups records into regions and mini clusters by shared styles, eras, labels, countries, genre tags and the mood words in the Discogs notes. Names and memberships are curated once and stored encrypted in `data/clusters.enc` (key: the `CLUSTER_KEY` secret, plus a local, git-ignored `.cluster_key`). Nightly builds put new records in the closest existing cluster.

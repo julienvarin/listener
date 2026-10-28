@@ -72,6 +72,10 @@ function start(payload) {
   for (const ev of ['scroll', 'animationend']) $('#sheet').addEventListener(ev, placeVideo);
   addEventListener('resize', placeVideo);
   player.addEventListener('queue', () => { renderPlayer(); renderQueue(); renderSheet(); });
+  player.addEventListener('ad', () => {
+    renderPlayer(); renderSheet();
+    if (player.ad) toast('YouTube ad playing — muted until the song starts');
+  });
   player.addEventListener('unavailable', () => toast('No audio found for this track — skipped'));
   playlists.addEventListener('change', () => { renderSidebar(); if (route().seg[0]?.startsWith('playlist')) render(); });
   playlists.addEventListener('status', renderSidebar);
@@ -837,7 +841,7 @@ function autoplayNext() {
 
 function renderPlayer() {
   const t = player.current;
-  const src = !t ? '' : player.source === 'apple' ? 'Apple Music Preview' : player.source === 'yt' ? 'YouTube' : '';
+  const src = !t ? '' : player.source === 'apple' ? 'Apple Music Preview' : player.ad ? '<span class="ad-flag">Ad · muted</span>' : player.source === 'yt' ? 'YouTube' : '';
   const playBtn = `<button class="ctl ctl-play" data-action="toggle" aria-label="${player.playing ? 'Pause' : 'Play'}">${icon(player.playing ? 'pause' : 'play')}</button>`;
   $('#playerbar').innerHTML = `
     <div class="pb-controls">
@@ -904,7 +908,7 @@ function renderSheet() {
     <div class="sheet-meta"><div><h2>${esc(t.title)}</h2><p>${esc(t.artist)} — ${esc(t.album)}</p></div>
       ${yt ? `<button class="icon-btn round ${sheetVideo ? 'on' : ''}" data-action="sheet-video" aria-label="${sheetVideo ? 'Show Artwork' : 'Show Video'}">${icon('pip')}</button>` : ''}
       <button class="icon-btn round" data-more-current aria-label="More">${icon('more')}</button></div>
-    <div class="lcd-progress big"><input type="range" class="scrub" min="0" max="1000" value="0" aria-label="Seek"><div class="times"><span class="t-cur"></span><span class="sheet-src">${player.source === 'apple' ? 'Preview' : ''}</span><span class="t-dur"></span></div></div>
+    <div class="lcd-progress big"><input type="range" class="scrub" min="0" max="1000" value="0" aria-label="Seek"><div class="times"><span class="t-cur"></span><span class="sheet-src">${player.source === 'apple' ? 'Preview' : player.ad ? '<span class="ad-flag">Ad · muted</span>' : ''}</span><span class="t-dur"></span></div></div>
     <div class="sheet-controls">
       <button class="ctl small ${player.shuffle ? 'on' : ''}" data-action="shuffle">${icon('shuffle')}</button>
       <button class="ctl big" data-action="prev">${icon('prev')}</button>
