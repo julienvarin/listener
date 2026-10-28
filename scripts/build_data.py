@@ -323,7 +323,7 @@ def main() -> None:
     ap.add_argument("--refresh", type=int, default=250, help="re-fetch market stats for this many stalest releases")
     ap.add_argument("--apple", type=int, default=500, help="max Apple preview lookups this run")
     ap.add_argument("--spotify", type=int, default=1000, help="max Spotify track lookups this run")
-    ap.add_argument("--entities", type=int, default=0, help="max Discogs requests for artist and label profiles this run")
+    ap.add_argument("--entities", default="0", help='max Discogs requests for artist and label profiles this run ("sample" = just the top artist and label)')
     ap.add_argument("--audio", type=int, default=0, help="max tracks to measure BPM and energy for this run")
     ap.add_argument("--workers", type=int, default=4, help="Discogs requests in flight at once")
     ap.add_argument("--max-rate", type=float, default=0, help="cap on Discogs requests a minute (0 = whatever Discogs allows)")
@@ -463,7 +463,8 @@ def main() -> None:
     collection_value = {k: float(re.sub(r"[^\d.]", "", v)) for k, v in value.items() if isinstance(v, str) and re.search(r"\d", v)}
 
     from entities import add_entities
-    entities, left = add_entities(api, releases, entities, args.entities)
+    sample = args.entities == "sample"
+    entities, left = add_entities(api, releases, entities, 1000 if sample else int(args.entities), sample=sample)
     if os.environ.get("GITHUB_OUTPUT"):  # lets a batched manual run decide whether to start the next batch
         with open(os.environ["GITHUB_OUTPUT"], "a") as f:
             f.write(f"entities_left={left}\n")

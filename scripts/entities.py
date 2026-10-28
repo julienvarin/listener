@@ -128,7 +128,7 @@ def fetch_label(api, lid: int, known: dict) -> tuple[dict, int]:
     }, calls
 
 
-def add_entities(api, releases: list, previous: dict, budget: int) -> tuple[dict, int]:
+def add_entities(api, releases: list, previous: dict, budget: int, sample: bool = False) -> tuple[dict, int]:
     """Returns ({"a<id>": artist, "l<id>": label}, profiles still to fetch), reusing previous profiles younger
     than MAX_AGE days."""
     today = datetime.now(timezone.utc).date()
@@ -148,6 +148,8 @@ def add_entities(api, releases: list, previous: dict, budget: int) -> tuple[dict
                 counts[f"l{lid}"] += 1
     out = {k: v for k, v in previous.items() if k in counts}
     todo = [k for k, _ in counts.most_common() if out.get(k, {}).get("at", "") < stale_before]
+    if sample:  # a quick check: just the top artist and the top label still to fetch
+        todo = [k for k in (next((k for k in todo if k[0] == kind), None) for kind in "al") if k]
     if not budget or not todo:
         return out, len(todo)
     print(f"fetching artist and label profiles: {len(todo)} to do, budget {budget} requests", file=sys.stderr)

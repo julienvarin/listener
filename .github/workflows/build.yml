@@ -14,7 +14,7 @@ on:
         description: Run this many builds back to back while artist and label profiles are left (use with a number in entities)
         default: "1"
       entities:
-        description: Discogs requests for artist and label profiles ("all" = every missing profile, empty = none)
+        description: Discogs requests for artist and label profiles ("all" = every missing profile, "sample" = just the top artist and label, empty = none)
         default: ""
       audio:
         description: Measure BPM and energy for up to this many tracks ("all" = every track not measured yet, empty = none)
