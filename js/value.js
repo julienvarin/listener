@@ -79,7 +79,7 @@ export function estimateValue(r) {
   if (g !== null && g >= 0.15) trend = 'Rising';
   else if (g !== null && g <= -0.15) trend = 'Falling';
   else if (N >= 2 && heat >= 1.5) trend = 'Heating up';
-  else if (!N && r.want >= 20) trend = 'Scarce';
+  else if (!N && r.want >= 20) trend = 'Hard to find';
 
   // Your copy: scale by the condition in your Discogs notes when Discogs has a price for that grade.
   const own = r.notes?.['Media Condition'];

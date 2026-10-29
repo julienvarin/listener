@@ -12,7 +12,6 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const enc = encodeURIComponent;
 const plural = (n, word) => `${n.toLocaleString()} ${word}${n === 1 ? '' : 's'}`;
 const isMobile = () => matchMedia('(max-width: 760px)').matches;
-const compactEuro = (v) => new Intl.NumberFormat(undefined, { style: 'currency', currency: 'EUR', notation: 'compact', maximumFractionDigits: 1 }).format(v);
 
 let lib, player, playlists;
 let sheetVideo = false;
@@ -404,7 +403,7 @@ function entityView(name, kind, releases, r, round, defaultSort) {
     e?.sublabels?.length && ['Sublabels', names(e.sublabels, lib.labels)],
     countries.length && ['Pressed in', countries.map(([c, n]) => `${esc(c)} ${pct(n, releases.length)}`).join(' · ')],
     formats.length && ['Formats', formats.map(([f, n]) => `${esc(f)} ${n}`).join(' · ')],
-    top && ['Most valuable', `<a href="#/album/${top.id}">${esc(top.title)}</a> · ≈ ${euro(top.worth)}`],
+    top && ['Most valuable', `<a href="#/album/${top.id}">${esc(top.title)}</a> · ${euro(top.worth)}`],
     rarest && ['Rarest', `<a href="#/album/${rarest.id}">${esc(rarest.title)}</a> · ${rarest.have} have`],
     since && ['Collecting since', new Date(since).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })],
     e?.urls?.length && ['Links', e.urls.map((u) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(host(u))} ↗</a>`).join(' · ')],
@@ -634,10 +633,9 @@ function albumView(r) {
     ${shelf(`More on ${r.label}`, byLabel, `#/label/${enc(r.label)}`)}`;
 }
 
-function shelf(title, releases, href, { sub = '', badge = null } = {}) {
+function shelf(title, releases, href, { badge = null } = {}) {
   if (!releases.length) return '';
   return `<section class="shelf"><h2 class="section-title"><a href="${href}">${esc(title)} ${icon('chevron-right')}</a></h2>
-    ${sub ? `<p class="shelf-sub">${esc(sub)}</p>` : ''}
     <div class="shelf-row">${releases.map((r) => card(r, badge ? badge(r) : '')).join('')}</div></section>`;
 }
 
@@ -701,55 +699,55 @@ function shelves() {
   const add = (key, title, list, opts = {}) => list.length && out.push({ key, title, list, ...opts });
 
   add('rediscover', 'Rediscover', shuffleWith(rs.filter((r) => r.added && r.added < sixMonths), rand), {
-    sub: 'Not added in a while.',
+    sub: 'Not added in a while',
     badge: (r) => `Added ${new Date(r.added).getFullYear()}`,
   });
-  add('onthisday', 'On This Day', shuffleWith(rs.filter((r) => r.added && md(r.added) === todayMd && r.added.slice(0, 4) < String(today.getFullYear())), rand), {
-    sub: 'Added on this date in past years.',
+  add('onthisday', 'On this day', shuffleWith(rs.filter((r) => r.added && md(r.added) === todayMd && r.added.slice(0, 4) < String(today.getFullYear())), rand), {
+    sub: 'Added on this date in past years',
     badge: (r) => `${today.getFullYear() - Number(r.added.slice(0, 4))} years ago`,
   });
-  add('recent', 'Recently Added', byAdded);
-  add('ratio', 'Best Want / Have Ratio', mixTop(stats.filter((r) => r.want >= 20 && r.want > r.have).sort(SORTS.ratio[1]), rand), {
-    sub: 'Far more wanted than owned.',
-    badge: (r) => `${want(r)} · ${r.ratio.toFixed(1)}×`,
+  add('recent', 'Recently added', byAdded);
+  add('ratio', 'Best have / want ratio', mixTop(stats.filter((r) => r.want >= 20 && r.want > r.have).sort(SORTS.ratio[1]), rand), {
+    sub: 'Far more wanted than owned',
+    badge: (r) => `${r.have.toLocaleString()} have · ${r.want.toLocaleString()} want`,
   });
-  add('valuable', 'Most Valuable', mixTop(rs.filter((r) => r.est).sort(SORTS.value[1]), rand), {
-    sub: 'Estimated from recent sales and listings.',
-    badge: (r) => `≈ ${euro(r.worth)}${r.est.trend ? ` · ${r.est.trend}` : ''}`,
+  add('valuable', 'Most valuable', mixTop(rs.filter((r) => r.est).sort(SORTS.value[1]), rand), {
+    sub: 'Estimated from recent sales and listings',
+    badge: (r) => `${euro(r.worth)}${r.est.trend ? ` · ${r.est.trend}` : ''}`,
   });
   const rising = (r) => (r.est.growth ?? 0) * 4 + (r.est.heat ?? 0);
-  add('heating', 'Heating Up', mixTop(rs.filter((r) => ['Rising', 'Heating up'].includes(r.est?.trend)).sort((a, b) => rising(b) - rising(a)), rand), {
-    sub: 'Going up, or listed well above recent sales.',
-    badge: (r) => `≈ ${euro(r.worth)}${r.est.growth >= 0.15 ? ` · +${Math.round(r.est.growth * 100)}% a year` : ` · ${r.for_sale} for sale from ${euro(r.lowest_price)}`}`,
+  add('heating', 'Heating up', mixTop(rs.filter((r) => ['Rising', 'Heating up'].includes(r.est?.trend)).sort((a, b) => rising(b) - rising(a)), rand), {
+    sub: 'Going up, or listed well above recent sales',
+    badge: (r) => (r.est.growth >= 0.15 ? `+${Math.round(r.est.growth * 100)}% a year` : `${r.for_sale} for sale from ${euro(r.lowest_price)}`),
   });
-  add('notforsale', 'Nobody’s Selling', mixTop(stats.filter((r) => !r.for_sale && r.want >= 10).sort(SORTS.want[1]), rand), {
-    sub: 'Wanted, none for sale.', badge: (r) => `${r.want} want · 0 for sale`,
+  add('notforsale', 'Nobody’s selling', mixTop(stats.filter((r) => !r.for_sale && r.want >= 10).sort(SORTS.want[1]), rand), {
+    sub: 'Wanted, none for sale', badge: (r) => `${r.want} want · 0 for sale`,
   });
   add('rarest', 'Rarest', mixTop(stats.filter((r) => r.have > 0).sort(SORTS.have[1]), rand), {
-    sub: 'Fewest owners on Discogs.', badge: (r) => `${r.have} have`,
+    sub: 'Fewest owners on Discogs', badge: (r) => `${r.have} have`,
   });
-  add('wanted', 'Most Wanted', mixTop(stats.slice().sort(SORTS.want[1]), rand), { badge: want });
+  add('wanted', 'Most wanted', mixTop(stats.slice().sort(SORTS.want[1]), rand), { badge: want });
   const labels = [...lib.labels].filter(([n, l]) => l.length >= 6 && !/^not on label/i.test(n));
   if (labels.length) {
     const [name, list] = labels[Math.floor(rand() * labels.length)];
-    add('label', `Label Spotlight: ${name}`, shuffleWith(list, rand), { href: `#/label/${enc(name)}`, sub: `${list.length} records.` });
+    add('label', `Label spotlight: ${name}`, shuffleWith(list, rand), { href: `#/label/${enc(name)}`, sub: `${list.length} records` });
   }
   const styles = [...lib.styles].filter(([, l]) => l.length >= 8);
   if (styles.length) {
     const [name, list] = styles[Math.floor(rand() * styles.length)];
-    add('style', `Style Spotlight: ${name}`, shuffleWith(list, rand), { href: `#/style/${enc(name)}`, sub: `${list.length} records.` });
+    add('style', `Style spotlight: ${name}`, shuffleWith(list, rand), { href: `#/style/${enc(name)}`, sub: `${list.length} records` });
   }
-  add('notes', 'From Your Notes', shuffleWith(rs.filter((r) => r.notes.Notes), rand), {
-    sub: 'Records you wrote about.', badge: (r) => r.notes.Notes.split('\n')[0].slice(0, 60),
+  add('notes', 'From your notes', shuffleWith(rs.filter((r) => r.notes.Notes), rand), {
+    sub: 'Records you wrote about', badge: (r) => r.notes.Notes.split('\n')[0].slice(0, 60),
   });
-  add('toprated', 'Community Favourites', mixTop(stats.filter((r) => r.votes >= 3).sort(SORTS.rating[1]), rand), {
-    sub: 'Highest rated on Discogs, weighted by votes.',
+  add('toprated', 'Community favourites', mixTop(stats.filter((r) => r.votes >= 3).sort(SORTS.rating[1]), rand), {
+    sub: 'Highest rated on Discogs, weighted by votes',
     badge: (r) => `★ ${r.community_rating.toFixed(2)} · ${r.votes} votes`,
   });
   const mine = [...lib.myGenres];
   if (mine.length) {
     const [name, list] = mine[Math.floor(rand() * mine.length)];
-    add('mygenre', `Your ${name} Crate`, shuffleWith(list, rand), { href: `#/mygenre/${enc(name)}`, sub: 'From your genre tags.' });
+    add('mygenre', `Your ${name} crate`, shuffleWith(list, rand), { href: `#/mygenre/${enc(name)}`, sub: 'From your genre tags' });
   }
   return out;
 }
@@ -760,10 +758,7 @@ function discoverView() {
   const hello = hour < 5 ? 'Late Night Digging' : hour < 12 ? 'Good Morning' : hour < 18 ? 'Good Afternoon' : 'Good Evening';
   const all = shelves();
   const [first, ...rest] = all;
-  const dv = lib.discogsValue;
-  const partial = lib.valuedCount < lib.releases.length * 0.9 ? ` (from ${lib.valuedCount.toLocaleString()} of ${lib.releases.length.toLocaleString()} records valued so far)` : '';
-  const worth = lib.estimatedTotal ? `Your collection is worth about <b>${compactEuro(lib.estimatedTotal)}</b>${partial}${dv.median ? ` · Discogs says ${compactEuro(dv.minimum)}–${compactEuro(dv.maximum)}, median ${compactEuro(dv.median)}` : ''}. <a href="#/albums?sort=value">By value</a>` : '';
-  $('#main').innerHTML = `${header('Listen Now', { actions: false, kicker: hello, sub: worth })}
+  $('#main').innerHTML = `${header('Listen Now', { actions: false, kicker: hello })}
     ${first ? `<section class="hero-shelf">${first.list.slice(0, 5).map((r, i) => `<a class="feature ${i ? '' : 'big'} ${lib.silent(r) ? 'silent' : ''}" href="#/album/${r.id}">${art(r)}<span class="feature-text"><small>${i ? '' : esc(first.title)}</small><b>${esc(r.title)}</b><span>${esc(r.artist)}</span></span><button class="card-play" data-play-album="${r.id}" aria-label="Play">${icon('play')}</button></a>`).join('')}</section>
       <div class="hero-actions"><button class="btn btn-primary" data-action="shuffle-rediscover">${icon('shuffle')}Shuffle Rediscover</button><a class="btn" href="#/list/rediscover">See All</a></div>` : ''}
     ${mixShelf()}
@@ -971,14 +966,13 @@ const todaysMixes = () => mixes(lib, mixTurn());
 function mixCard(m) {
   return `<div class="card"><div class="card-cover"><a class="card-art" href="#/mix/${m.id}">${mosaic(m.items, '')}</a>
     <button class="card-play" data-play-mix="${m.id}" aria-label="Play">${icon('play')}</button></div>
-    <a class="card-title" href="#/mix/${m.id}">${esc(m.name)}</a><span class="card-sub">${esc(m.sub)}</span></div>`;
+    <a class="card-title" href="#/mix/${m.id}">${esc(m.name)}</a></div>`;
 }
 
 function mixShelf() {
   const list = todaysMixes();
   if (!list.length) return '';
-  return `<section class="shelf"><h2 class="section-title"><a href="#/playlists">Made for You ${icon('chevron-right')}</a></h2>
-    <p class="shelf-sub">New mixes every day from your notes, countries, eras and styles.</p>
+  return `<section class="shelf"><h2 class="section-title"><a href="#/playlists">Made for you ${icon('chevron-right')}</a></h2>
     <div class="shelf-row">${list.map(mixCard).join('')}</div></section>`;
 }
 
@@ -990,7 +984,7 @@ function mixView(m) {
     <section class="album-hero">
       ${mosaic(m.items, 'album-art')}
       <div class="album-info">
-        <p class="kicker">Made for You</p>
+        <p class="kicker">Made for you</p>
         <h1>${esc(m.name)}</h1>
         <p class="album-meta">${esc(m.sub)} · ${plural(m.items.length, 'song')}</p>
         <div class="head-actions">
@@ -1007,11 +1001,11 @@ function playlistsView() {
   viewReleases = [];
   const made = todaysMixes();
   $('#main').innerHTML = `${header('Playlists', { actions: false })}
-    ${made.length ? `<div class="section-head"><h2 class="section-title">Made for You</h2><button class="btn" data-action="reroll-mixes">${icon('shuffle')}New Mixes</button></div>
-    <p class="shelf-sub">Rotates daily: moods from your notes, countries and decades, Discogs styles, your genre tags and map clusters.</p>
+    ${made.length ? `<div class="section-head"><h2 class="section-title">Made for you</h2><button class="btn" data-action="reroll-mixes">${icon('shuffle')}New Mixes</button></div>
+    <p class="shelf-sub">Rotates daily: moods from your notes, countries and decades, Discogs styles, your genre tags and map clusters</p>
     <div class="grid">${made.map(mixCard).join('')}</div>` : ''}
     <h2 class="section-title">Your Playlists</h2>
-    <p class="shelf-sub">${playlists.token ? 'Synced across your devices with a private GitHub Gist.' : 'Saved on this device.'}</p>
+    <p class="shelf-sub">${playlists.token ? 'Synced across your devices with a private GitHub Gist' : 'Saved on this device'}</p>
     <div class="grid">
       <button class="card card-new" data-action="new-playlist"><span class="card-art art-empty">${icon('plus')}</span><span class="card-title">New Playlist</span></button>
       <button class="card card-new" data-action="new-smart"><span class="card-art art-empty">${icon('sparkles')}</span><span class="card-title">New Smart Playlist</span><span class="card-sub">Rules pick the songs</span></button>

@@ -1,6 +1,6 @@
 import { estimateValue } from './value.js';
 
-export const euro = (v) => new Intl.NumberFormat(undefined, { style: 'currency', currency: 'EUR', maximumFractionDigits: v < 10 ? 2 : 0 }).format(v);
+export const euro = (v) => `${v.toLocaleString(undefined, { maximumFractionDigits: v < 10 ? 2 : 0 })} EUR`;
 
 export const norm = (s = '') =>
   s.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();

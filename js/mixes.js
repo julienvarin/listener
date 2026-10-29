@@ -22,7 +22,7 @@ import { trackNoteText } from './library.js';
 
 const MIN = 8;
 const TRACKS = 30;
-const cap = (s) => s.replace(/(^|\s)\S/g, (c) => c.toUpperCase());
+const capFirst = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 const decadeName = (d) => `${d.slice(2)}`;
 
@@ -64,28 +64,28 @@ function recipes(lib) {
   // Mood mixes take the tracks the mood is about: all of a record's tracks for a note on the whole record,
   // only the named ones for "B1 dreamy".
   const moodPick = (m) => (t, r) => moodsOf(r, t).includes(m);
-  out.mood = big(moods).map(([m, list]) => ({ id: `mood-${slug(m)}`, tags: [m], name: `${cap(m)} Moods`, sub: `Tracks your notes call ${m}.`, list, pick: moodPick(m) }));
+  out.mood = big(moods).map(([m, list]) => ({ id: `mood-${slug(m)}`, tags: [m], name: `${capFirst(m)} moods`, sub: `Tracks your notes call ${m}`, list, pick: moodPick(m) }));
   out.moodStyle = big(groupBy(rs, (r) => moodsOf(r).flatMap((m) => r.styles.map((s) => `${m}|${s}`))))
-    .map(([k, list]) => { const [m, s] = k.split('|'); return { id: `ms-${slug(k)}`, tags: [m, s], name: `${cap(m)} ${s}`, sub: `${s} your notes call ${m}.`, list, pick: moodPick(m) }; });
+    .map(([k, list]) => { const [m, s] = k.split('|'); return { id: `ms-${slug(k)}`, tags: [m, s], name: `${capFirst(m)} ${s}`, sub: `${s} your notes call ${m}`, list, pick: moodPick(m) }; });
   out.countryDecade = big(groupBy(rs, (r) => (r.country && r.decade ? [`${r.country}|${r.decade}`] : [])))
-    .map(([k, list]) => { const [c, d] = k.split('|'); return { id: `cd-${slug(k)}`, tags: [c, d], name: `${c} in the ${decadeName(d)}`, sub: `Pressed in ${c}, ${d}.`, list }; });
+    .map(([k, list]) => { const [c, d] = k.split('|'); return { id: `cd-${slug(k)}`, tags: [c, d], name: `${c} in the ${decadeName(d)}`, sub: `Pressed in ${c}, ${d}`, list }; });
   out.styleDecade = big(groupBy(rs, (r) => (r.decade ? r.styles.map((s) => `${s}|${r.decade}`) : [])))
-    .map(([k, list]) => { const [s, d] = k.split('|'); return { id: `sd-${slug(k)}`, tags: [s, d], name: `${decadeName(d)} ${s}`, sub: `Discogs style ${s}, ${d}.`, list }; });
+    .map(([k, list]) => { const [s, d] = k.split('|'); return { id: `sd-${slug(k)}`, tags: [s, d], name: `${decadeName(d)} ${s}`, sub: `Discogs style ${s}, ${d}`, list }; });
   out.myGenre = big(groupBy(rs, (r) => (r.myGenre ? [r.myGenre] : [])))
-    .map(([g, list]) => ({ id: `mg-${slug(g)}`, tags: [g], name: `${g} Crate Dig`, sub: `From your ${g} tag.`, list }));
+    .map(([g, list]) => ({ id: `mg-${slug(g)}`, tags: [g], name: `${g} crate dig`, sub: `From your ${g} tag`, list }));
   out.myGenreDecade = big(groupBy(rs, (r) => (r.myGenre && r.decade ? [`${r.myGenre}|${r.decade}`] : [])))
-    .map(([k, list]) => { const [g, d] = k.split('|'); return { id: `mgd-${slug(k)}`, tags: [g, d], name: `${g}, ${d}`, sub: `Your ${g} tag, ${d}.`, list }; });
+    .map(([k, list]) => { const [g, d] = k.split('|'); return { id: `mgd-${slug(k)}`, tags: [g, d], name: `${g}, ${d}`, sub: `Your ${g} tag, ${d}`, list }; });
   out.cluster = lib.clusters.map((c) => ({ c, list: (lib.clusterMembers.get(c.id) || []).filter((r) => rs.includes(r)) }))
     .filter(({ list }) => list.length >= MIN)
-    .map(({ c, list }) => ({ id: `cl-${c.id}`, name: c.name, sub: 'A corner of your Collection Map.', list }));
+    .map(({ c, list }) => ({ id: `cl-${c.id}`, name: c.name, sub: 'A corner of your collection map', list }));
   out.label = big(groupBy(rs, (r) => [...new Set(r.labels.map((l) => l.name))].filter((n) => !/^(not on label|white label|none|no label)/i.test(n))))
-    .map(([l, list]) => ({ id: `lb-${slug(l)}`, name: `${l} Selects`, sub: `Records on ${l}.`, list }));
+    .map(([l, list]) => ({ id: `lb-${slug(l)}`, name: `${l} selects`, sub: `Records on ${l}`, list }));
   const noted = rs.filter((r) => r.noteParts.tracks.some(Boolean));
-  if (noted.length >= MIN) out.highlights = [{ id: 'highlights', name: 'Your Highlights', sub: 'Tracks you singled out in your notes.', list: noted, pick: (t) => !!t.note }];
+  if (noted.length >= MIN) out.highlights = [{ id: 'highlights', name: 'Your highlights', sub: 'Tracks you singled out in your notes', list: noted, pick: (t) => !!t.note }];
   const gems = rs.filter((r) => r.have !== undefined && r.have <= 150 && r.want > r.have);
-  if (gems.length >= MIN) out.gems = [{ id: 'gems', name: 'Hidden Gems', sub: 'Few own them, more want them.', list: gems }];
+  if (gems.length >= MIN) out.gems = [{ id: 'gems', name: 'Hidden gems', sub: 'Few own them, more want them', list: gems }];
   const old = rs.filter((r) => r.added && Date.now() - Date.parse(r.added) > 2 * 365 * 864e5);
-  if (old.length >= MIN) out.dust = [{ id: 'dust', name: 'Dusted Off', sub: 'In the crates for over two years.', list: old }];
+  if (old.length >= MIN) out.dust = [{ id: 'dust', name: 'Dusted off', sub: 'In the crates for over two years', list: old }];
   return out;
 }
 
