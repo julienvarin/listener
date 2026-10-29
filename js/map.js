@@ -5,7 +5,7 @@ import { norm, sharedTraits } from './library.js';
 
 const PALETTE = ['#fa2d48', '#0a84ff', '#34c759', '#ff9f0a', '#bf5af2', '#30b0c7', '#5e5ce6', '#a2845e', '#64d2ff', '#ffd60a', '#3a3a3c'];
 const OTHER = '#c7c7cc';
-const MODES = [['cluster', 'Clusters'], ['style', 'Style'], ['decade', 'Decade'], ['label', 'Label'], ['mygenre', 'My Genre']];
+const MODES = [['cluster', 'Clusters'], ['style', 'Style'], ['decade', 'Decade'], ['label', 'Label'], ['mygenre', 'My genre']];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const pct = (v) => `${Math.round(v * 100)}%`;
 
@@ -63,7 +63,7 @@ export class CollectionMap {
     root.innerHTML = `
       <canvas class="map-canvas"></canvas>
       <div class="map-top">
-        <div class="map-title"><h1>Collection Map</h1>
+        <div class="map-title"><h1>Collection map</h1>
           <p>Regions split into smaller crates as you zoom in. Records sit together when they share styles, eras, labels, countries, your genre tags and the words in your notes. Click a name to see what defines it.</p></div>
         <div class="segmented">${MODES.map(([k, l]) => `<button data-mode="${k}">${l}</button>`).join('')}</div>
         <label class="filter-field map-search">${icon('search')}<input type="search" placeholder="Highlight artist, label, style…"></label>
@@ -399,7 +399,7 @@ export class CollectionMap {
       <button class="icon-btn map-card-close" data-map-action="close" aria-label="Close">${icon('close')}</button>
       <div class="map-card-head"><img src="${esc(r.cover)}" alt=""><div><b>${esc(r.title)}</b><span>${esc(r.artist)}</span><small>${esc([r.label, r.catno, r.year].filter(Boolean).join(' · '))}</small>
         ${c ? `<button class="map-cluster-link" data-map-action="cluster:${c.id}"><i style="background:${c.color}"></i>${esc(c.name)}</button>` : ''}</div></div>
-      <div class="head-actions"><button class="btn btn-primary" data-map-action="play">${icon('play')}Play</button><button class="btn" data-map-action="open">Open Album</button></div>
+      <div class="head-actions"><button class="btn btn-primary" data-map-action="play">${icon('play')}Play</button><button class="btn" data-map-action="open">Open album</button></div>
       ${sim.length ? `<p class="map-card-label">Most similar · ringed on the map</p><div class="map-sim">${sim.map((m) => `<button data-map-action="${m.r.id}"><img src="${esc(m.r.thumb || m.r.cover)}" alt=""><span><b>${esc(m.r.title)}</b><small>${esc(m.r.artist)}</small><em>${esc(sharedTraits(r, m.r).join(' · ') || 'Similar overall')}</em></span></button>`).join('')}</div>` : ''}`;
     this.cardEl.hidden = false;
     this.draw();
@@ -423,7 +423,7 @@ export class CollectionMap {
       <p class="map-facts">${esc(c.facts || `${c.size} records`)}</p>
       ${composition(c)}
       <div class="map-near">${covers.map((r) => `<button data-map-action="${r.id}" title="${esc(`${r.artist} — ${r.title}`)}"><img src="${esc(r.thumb || r.cover)}" alt=""></button>`).join('')}</div>
-      <div class="head-actions"><button class="btn btn-primary" data-map-action="play-cluster">${icon('shuffle')}Shuffle</button><button class="btn" data-map-action="open-cluster">See All</button></div>`;
+      <div class="head-actions"><button class="btn btn-primary" data-map-action="play-cluster">${icon('shuffle')}Shuffle</button><button class="btn" data-map-action="open-cluster">See all</button></div>`;
     this.cardEl.hidden = false;
     this.draw();
   }
@@ -444,7 +444,7 @@ export class CollectionMap {
       <p class="map-facts">${esc(g.facts || `${g.size} records`)}</p>
       ${composition(g)}
       <div class="map-minis">${minis.map((c) => `<button data-map-action="cluster:${c.id}"><i style="background:${c.color}"></i><span><b>${esc(c.name)}</b><small>${esc(c.facts || '')}</small></span></button>`).join('')}</div>
-      <div class="head-actions"><button class="btn btn-primary" data-map-action="play-region">${icon('shuffle')}Shuffle</button><button class="btn" data-map-action="open-region">See All</button></div>`;
+      <div class="head-actions"><button class="btn btn-primary" data-map-action="play-region">${icon('shuffle')}Shuffle</button><button class="btn" data-map-action="open-region">See all</button></div>`;
     this.cardEl.hidden = false;
     this.draw();
   }

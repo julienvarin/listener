@@ -26,7 +26,7 @@ export class Library {
     this.byId = new Map();
     this.itemCache = new Map();
     for (const r of this.releases) {
-      r.artist = r.artists.join(', ') || 'Unknown Artist';
+      r.artist = r.artists.join(', ') || 'Unknown artist';
       r.label = r.labels[0]?.name || '';
       r.catno = r.labels[0]?.catno || '';
       r.decade = r.year ? `${Math.floor(r.year / 10) * 10}s` : '';

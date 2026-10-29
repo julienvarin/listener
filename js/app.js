@@ -113,11 +113,11 @@ function render() {
     discover: () => discoverView(),
     list: () => shelfListView(arg, r),
     map: () => mapView(r),
-    mygenres: () => tilesView('My Genres', lib.myGenres, 'mygenre'),
-    mygenre: () => collectionView(arg, 'My Genre', lib.myGenres.get(arg), r, false, 'added'),
+    mygenres: () => tilesView('My genres', lib.myGenres, 'mygenre'),
+    mygenre: () => collectionView(arg, 'My genre', lib.myGenres.get(arg), r, false, 'added'),
     cluster: () => clusterView(Number(arg), r),
     region: () => regionView(Number(arg), r),
-    recent: () => browseView('Recently Added', lib.releases, r, { sort: 'added' }),
+    recent: () => browseView('Recently added', lib.releases, r, { sort: 'added' }),
     albums: () => browseView('Albums', lib.releases, r, { sort: 'artist' }),
     artists: () => indexView('Artists', lib.artists, 'artist', true),
     labels: () => indexView('Labels', lib.labels, 'label', false),
@@ -149,16 +149,16 @@ function go(hash) { location.hash = hash; }
 /* ---------- sidebar & tabbar ---------- */
 
 const NAV = [
-  ['discover', 'Listen Now', 'play-circle'],
-  ['map', 'Collection Map', 'map'],
-  ['recent', 'Recently Added', 'clock'],
+  ['discover', 'Listen now', 'play-circle'],
+  ['map', 'Collection map', 'map'],
+  ['recent', 'Recently added', 'clock'],
   ['albums', 'Albums', 'album'],
   ['artists', 'Artists', 'mic'],
   ['labels', 'Labels', 'tag'],
   ['genres', 'Genres', 'grid'],
   ['styles', 'Styles', 'sparkles'],
   ['decades', 'Decades', 'calendar'],
-  ['mygenres', 'My Genres', 'bookmark'],
+  ['mygenres', 'My genres', 'bookmark'],
 ];
 
 function renderSidebar() {
@@ -173,9 +173,9 @@ function renderSidebar() {
     <nav class="side-nav">
       <h6>Library</h6>
       ${NAV.map(([id, label, ic]) => `<a href="#/${id}" data-nav="${id}">${icon(ic)}<span>${label}</span></a>`).join('')}
-      <h6>Playlists <button class="icon-btn" data-action="new-playlist" title="New Playlist">${icon('plus')}</button></h6>
+      <h6>Playlists <button class="icon-btn" data-action="new-playlist" title="New playlist">${icon('plus')}</button></h6>
       <a href="#/playlists" data-nav="playlists">${icon('grid')}<span>Made for You</span></a>
-      <button class="side-link" data-action="new-smart">${icon('plus')}<span>New Smart Playlist</span></button>
+      <button class="side-link" data-action="new-smart">${icon('plus')}<span>New smart playlist</span></button>
       ${playlists.all.map((p) => `<a href="#/playlist/${p.id}" data-nav="playlist:${p.id}" data-drop-playlist="${p.id}">${icon(p.smart ? 'sparkles' : 'playlist')}<span>${esc(p.name)}</span></a>`).join('')}
       ${playlists.all.length ? '' : '<p class="side-empty">Create a playlist with + or from any track’s ••• menu.</p>'}
     </nav>
@@ -189,7 +189,7 @@ function renderSidebar() {
 }
 
 function renderTabbar() {
-  const tabs = [['discover', 'Listen Now', 'play-circle'], ['library', 'Library', 'album'], ['map', 'Map', 'map'], ['search', 'Search', 'search'], ['playlists', 'Playlists', 'playlist']];
+  const tabs = [['discover', 'Listen now', 'play-circle'], ['library', 'Library', 'album'], ['map', 'Map', 'map'], ['search', 'Search', 'search'], ['playlists', 'Playlists', 'playlist']];
   $('#tabbar').innerHTML = tabs.map(([id, label, ic]) => `<a href="#/${id}" data-tab="${id}">${icon(ic)}<span>${label}</span></a>`).join('');
 }
 
@@ -253,17 +253,17 @@ function header(title, { kicker = '', sub = '', actions = true, extra = '' } = {
 let viewReleases = [];
 
 const SORTS = {
-  added: ['Recently Added', (a, b) => (b.added || '').localeCompare(a.added || '')],
+  added: ['Recently added', (a, b) => (b.added || '').localeCompare(a.added || '')],
   artist: ['Artist', (a, b) => a.artist.localeCompare(b.artist) || (a.year || 0) - (b.year || 0)],
   title: ['Title', (a, b) => a.title.localeCompare(b.title)],
   year: ['Year', (a, b) => (a.year || 9999) - (b.year || 9999) || a.artist.localeCompare(b.artist)],
   label: ['Label', (a, b) => a.label.localeCompare(b.label) || a.catno.localeCompare(b.catno, undefined, { numeric: true })],
-  want: ['Most Wanted', (a, b) => (b.want || 0) - (a.want || 0)],
+  want: ['Most wanted', (a, b) => (b.want || 0) - (a.want || 0)],
   have: ['Rarest', (a, b) => (a.have || 1e9) - (b.have || 1e9)],
-  ratio: ['Want / Have', (a, b) => b.ratioScore - a.ratioScore],
-  value: ['Estimated Value', (a, b) => b.worth - a.worth],
-  price: ['Lowest Price', (a, b) => (b.lowest_price || 0) - (a.lowest_price || 0)],
-  rating: ['Community Rating', (a, b) => b.score - a.score],
+  ratio: ['Want / have', (a, b) => b.ratioScore - a.ratioScore],
+  value: ['Estimated value', (a, b) => b.worth - a.worth],
+  price: ['Lowest price', (a, b) => (b.lowest_price || 0) - (a.lowest_price || 0)],
+  rating: ['Community rating', (a, b) => b.score - a.score],
 };
 const FILTERS = [
   ['genre', 'Genre', (r) => r.genres],
@@ -271,7 +271,7 @@ const FILTERS = [
   ['decade', 'Decade', (r) => (r.decade ? [r.decade] : [])],
   ['format', 'Format', (r) => r.formats],
   ['country', 'Country', (r) => (r.country ? [r.country] : [])],
-  ['mygenre', 'My Genre', (r) => (r.myGenre ? [r.myGenre] : [])],
+  ['mygenre', 'My genre', (r) => (r.myGenre ? [r.myGenre] : [])],
   ['tag', 'Tag', (r) => (r.notes.Tag ? [r.notes.Tag] : [])],
   ['condition', 'Condition', (r) => (r.notes['Media Condition'] ? [r.notes['Media Condition']] : [])],
 ];
@@ -319,7 +319,7 @@ function browseView(title, base, r, { sort: defaultSort }) {
 function collectionView(name, kind, releases, r, round = false, defaultSort = 'year') {
   if (!releases) return emptyView(`${kind} not found`);
   if (kind === 'Artist' || kind === 'Label') return entityView(name, kind, releases, r, round, defaultSort);
-  const skip = { Genre: ['genre'], Style: ['style'], Decade: ['decade'], 'My Genre': ['mygenre'] }[kind] || [];
+  const skip = { Genre: ['genre'], Style: ['style'], Decade: ['decade'], 'My genre': ['mygenre'] }[kind] || [];
   const tb = toolbar(releases, r.q, defaultSort, skip);
   viewReleases = tb.filtered.slice().sort(SORTS[tb.sort][1]);
   const lead = releases.find(hasCover);
@@ -421,7 +421,7 @@ function entityView(name, kind, releases, r, round, defaultSort) {
       ${partners.length > 1 || (partners.length && !isArtist) ? `<h2 class="section-title">${isArtist ? 'Labels' : 'Artists'} in Your Collection</h2>
         <div class="chips">${partners.map(([n, c]) => `<a class="chip" href="#/${isArtist ? 'label' : 'artist'}/${enc(n)}">${esc(n)} <span>${c}</span></a>`).join('')}</div>` : ''}
     </section>
-    <h2 class="section-title">Your Records</h2>
+    <h2 class="section-title">Your records</h2>
     ${tb.html}
     <div class="grid" id="grid"></div>`;
   mountChunks($('#grid'), viewReleases, card);
@@ -484,7 +484,7 @@ function indexView(title, map, kind, round) {
   $('#main').innerHTML = `${header(title, { actions: false, sub: plural(map.size, kind) })}
     <div class="index-tools">
       <label class="filter-field">${icon('search')}<input id="index-filter" type="search" placeholder="Filter ${title.toLowerCase()}"></label>
-      <div class="segmented" id="index-sort">${[['name', 'Name'], ['count', 'Most Records']].map(([k, l]) => `<button data-sort="${k}" class="${k === mode ? 'on' : ''}">${l}</button>`).join('')}</div>
+      <div class="segmented" id="index-sort">${[['name', 'Name'], ['count', 'Most records']].map(([k, l]) => `<button data-sort="${k}" class="${k === mode ? 'on' : ''}">${l}</button>`).join('')}</div>
     </div>
     <div class="index-list" id="index"></div>`;
   const row = ([name, rs]) => {
@@ -538,7 +538,7 @@ function libraryView() {
   viewReleases = [];
   $('#main').innerHTML = `${header('Library', { actions: false })}
     <nav class="library-links">${NAV.map(([id, label, ic]) => `<a href="#/${id}">${icon(ic)}<span>${label}</span>${icon('chevron-right')}</a>`).join('')}</nav>
-    <h2 class="section-title">Recently Added</h2>
+    <h2 class="section-title">Recently added</h2>
     <div class="grid">${lib.releases.slice().sort(SORTS.added[1]).slice(0, 12).map((r) => card(r)).join('')}</div>
     <p class="foot-note">${plural(lib.releases.length, 'record')} · <button class="link-btn" data-action="lock">Lock</button></p>`;
 }
@@ -602,7 +602,7 @@ function albumView(r) {
       ${art(r, 'album-art')}
       <div class="album-info">
         <h1>${esc(r.title)}</h1>
-        <p class="album-artist">${r.artists.map((a) => `<a href="#/artist/${enc(a)}">${esc(a)}</a>`).join(', ') || 'Unknown Artist'}</p>
+        <p class="album-artist">${r.artists.map((a) => `<a href="#/artist/${enc(a)}">${esc(a)}</a>`).join(', ') || 'Unknown artist'}</p>
         <p class="album-meta">${meta}</p>
         <div class="head-actions">
           <button class="btn btn-primary" data-action="play-view" ${silent ? 'disabled' : ''}>${icon('play')}Play</button>
@@ -615,7 +615,7 @@ function albumView(r) {
     </section>
     ${silent && (tracks.length || extras.length) ? '<p class="foot-note">No YouTube video, Apple Music preview or Spotify track for this record.</p>' : ''}
     <div class="tracks">${tracks.length ? trackRows(tracks) : ''}</div>
-    ${extras.length ? `<h2 class="section-title">${tracks.length ? 'Other Videos' : 'Videos'}</h2><div class="tracks">${trackRows(extras, { numbered: false })}</div>` : ''}
+    ${extras.length ? `<h2 class="section-title">${tracks.length ? 'Other videos' : 'Videos'}</h2><div class="tracks">${trackRows(extras, { numbered: false })}</div>` : ''}
     ${!tracks.length && !extras.length ? `<p class="foot-note">${r.stats_at ? 'No tracklist on Discogs for this release.' : 'Tracks for this record load with the next library build.'}</p>` : ''}
     ${statsStrip(r)}
     <dl class="album-facts">
@@ -644,7 +644,7 @@ function statsStrip(r) {
   const cells = [
     [r.have.toLocaleString(), 'Have'],
     [r.want.toLocaleString(), 'Want'],
-    [r.have ? r.ratio.toFixed(2) : '–', 'Want / Have'],
+    [r.have ? r.ratio.toFixed(2) : '–', 'Want / have'],
     [r.votes ? `${r.community_rating.toFixed(2)}` : '–', r.votes ? `Rating · ${r.votes} votes` : 'Rating'],
     [r.lowest_price ? euro(r.lowest_price) : '–', r.for_sale ? `Lowest of ${r.for_sale} for sale` : 'None for sale'],
   ];
@@ -755,12 +755,12 @@ function shelves() {
 function discoverView() {
   viewReleases = [];
   const hour = new Date().getHours();
-  const hello = hour < 5 ? 'Late Night Digging' : hour < 12 ? 'Good Morning' : hour < 18 ? 'Good Afternoon' : 'Good Evening';
+  const hello = hour < 5 ? 'Late night digging' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
   const all = shelves();
   const [first, ...rest] = all;
-  $('#main').innerHTML = `${header('Listen Now', { actions: false, kicker: hello })}
+  $('#main').innerHTML = `${header('Listen now', { actions: false, kicker: hello })}
     ${first ? `<section class="hero-shelf">${first.list.slice(0, 5).map((r, i) => `<a class="feature ${i ? '' : 'big'} ${lib.silent(r) ? 'silent' : ''}" href="#/album/${r.id}">${art(r)}<span class="feature-text"><small>${i ? '' : esc(first.title)}</small><b>${esc(r.title)}</b><span>${esc(r.artist)}</span></span><button class="card-play" data-play-album="${r.id}" aria-label="Play">${icon('play')}</button></a>`).join('')}</section>
-      <div class="hero-actions"><button class="btn btn-primary" data-action="shuffle-rediscover">${icon('shuffle')}Shuffle Rediscover</button><a class="btn" href="#/list/rediscover">See All</a></div>` : ''}
+      <div class="hero-actions"><button class="btn btn-primary" data-action="shuffle-rediscover">${icon('shuffle')}Shuffle rediscover</button><a class="btn" href="#/list/rediscover">See all</a></div>` : ''}
     ${mixShelf()}
     ${rest.map((sh) => shelf(sh.title, sh.list.slice(0, 16), sh.href || `#/list/${sh.key}`, sh)).join('')}`;
 }
@@ -808,7 +808,7 @@ function playlistItems(p) {
 
 function smartEditor(p = null) {
   const def = structuredClone(p?.smart || blankSmart());
-  let name = p?.name || 'Smart Playlist';
+  let name = p?.name || 'Smart playlist';
   const dlg = $('#dialog');
   const opts = (list, val) => list.map(([k, l]) => `<option value="${k}" ${k === val ? 'selected' : ''}>${esc(l)}</option>`).join('');
   // Rules are addressed by their path of indexes from the top group, e.g. "2.0" = first rule of the third item.
@@ -841,7 +841,7 @@ function smartEditor(p = null) {
         const sub = path === '' ? String(i) : `${path}.${i}`;
         return isGroup(x) ? groupBox(x, sub, depth + 1) : ruleRow(x, sub);
       }).join('')}</div>
-      <div class="group-actions"><button type="button" class="btn" data-rule-add>${icon('plus')}Add Rule</button>${depth < 2 ? `<button type="button" class="btn" data-group-add>${icon('plus')}Add Group</button>` : ''}</div>
+      <div class="group-actions"><button type="button" class="btn" data-rule-add>${icon('plus')}Add rule</button>${depth < 2 ? `<button type="button" class="btn" data-group-add>${icon('plus')}Add group</button>` : ''}</div>
     </div>`;
   const count = () => {
     const rs = matchReleases(lib, def);
@@ -853,7 +853,7 @@ function smartEditor(p = null) {
     datalists.clear();
     const body = groupBox(def, '', 0);
     dlg.innerHTML = `<form class="dialog-card" id="smart-form">
-      <h2>${p ? 'Edit Smart Playlist' : 'New Smart Playlist'}</h2>
+      <h2>${p ? 'Edit smart playlist' : 'New smart playlist'}</h2>
       <input class="dialog-name" data-k="name" value="${esc(name)}" placeholder="Name" aria-label="Name">
       <p class="dialog-line">Match <select data-k="match" data-root>${opts([['all', 'all'], ['any', 'any']], def.match)}</select> of these rules:</p>
       ${body}
@@ -939,7 +939,7 @@ function smartEditor(p = null) {
     dlg.querySelectorAll('[data-k="add"]').forEach(addValue);
     dlg.hidden = true;
     if (p) { playlists.updateSmart(p.id, name.trim(), def); render(); }
-    else go(`#/playlist/${playlists.create(name.trim() || 'Smart Playlist', [], def).id}`);
+    else go(`#/playlist/${playlists.create(name.trim() || 'Smart playlist', [], def).id}`);
   };
   draw();
   dlg.hidden = false;
@@ -1001,14 +1001,14 @@ function playlistsView() {
   viewReleases = [];
   const made = todaysMixes();
   $('#main').innerHTML = `${header('Playlists', { actions: false })}
-    ${made.length ? `<div class="section-head"><h2 class="section-title">Made for you</h2><button class="btn" data-action="reroll-mixes">${icon('shuffle')}New Mixes</button></div>
+    ${made.length ? `<div class="section-head"><h2 class="section-title">Made for you</h2><button class="btn" data-action="reroll-mixes">${icon('shuffle')}New mixes</button></div>
     <p class="shelf-sub">Rotates daily: moods from your notes, countries and decades, Discogs styles, your genre tags and map clusters</p>
     <div class="grid">${made.map(mixCard).join('')}</div>` : ''}
-    <h2 class="section-title">Your Playlists</h2>
+    <h2 class="section-title">Your playlists</h2>
     <p class="shelf-sub">${playlists.token ? 'Synced across your devices with a private GitHub Gist' : 'Saved on this device'}</p>
     <div class="grid">
-      <button class="card card-new" data-action="new-playlist"><span class="card-art art-empty">${icon('plus')}</span><span class="card-title">New Playlist</span></button>
-      <button class="card card-new" data-action="new-smart"><span class="card-art art-empty">${icon('sparkles')}</span><span class="card-title">New Smart Playlist</span><span class="card-sub">Rules pick the songs</span></button>
+      <button class="card card-new" data-action="new-playlist"><span class="card-art art-empty">${icon('plus')}</span><span class="card-title">New playlist</span></button>
+      <button class="card card-new" data-action="new-smart"><span class="card-art art-empty">${icon('sparkles')}</span><span class="card-title">New smart playlist</span><span class="card-sub">Rules pick the songs</span></button>
       ${playlists.all.map((p) => {
         const items = playlistItems(p);
         return `<div class="card"><div class="card-cover"><a class="card-art" href="#/playlist/${p.id}">${mosaic(items, '')}</a>
@@ -1027,14 +1027,14 @@ function playlistView(p) {
     <section class="album-hero">
       ${mosaic(items, 'album-art')}
       <div class="album-info">
-        <p class="kicker">${p.smart ? 'Smart Playlist' : 'Playlist'}</p>
+        <p class="kicker">${p.smart ? 'Smart playlist' : 'Playlist'}</p>
         <h1>${esc(p.name)}</h1>
         <p class="album-meta">${plural(items.length, 'song')}</p>
         ${p.smart ? `<p class="smart-rules">${esc(describe(p.smart))}</p>` : ''}
         <div class="head-actions">
           <button class="btn btn-primary" data-play-playlist="${p.id}" ${items.length ? '' : 'disabled'}>${icon('play')}Play</button>
           <button class="btn" data-play-playlist="${p.id}" data-shuffle ${items.length ? '' : 'disabled'}>${icon('shuffle')}Shuffle</button>
-          ${p.smart ? `<button class="btn" data-edit-smart="${p.id}">${icon('pencil')}Edit Rules</button>` : ''}
+          ${p.smart ? `<button class="btn" data-edit-smart="${p.id}">${icon('pencil')}Edit rules</button>` : ''}
           <button class="icon-btn round" data-more-playlist="${p.id}" aria-label="More">${icon('more')}</button>
         </div>
       </div>
@@ -1052,7 +1052,7 @@ function searchView(q) {
   const res = lib.search(q);
   if (!res) {
     $('#main').innerHTML = `${header('Search', { actions: false })}${field}
-      <h2 class="section-title">Browse Genres</h2>
+      <h2 class="section-title">Browse genres</h2>
       <div class="tiles">${[...lib.genres].sort((a, b) => b[1].length - a[1].length).map(([g, rs]) => `<a class="tile" href="#/genre/${enc(g)}" style="--tint:${tint(g)}"><span class="tile-name">${esc(g)}</span><span class="tile-count">${plural(rs.length, 'album')}</span></a>`).join('')}</div>`;
     bindMobileSearch();
     return;
@@ -1131,7 +1131,7 @@ function autoplayNext() {
 
 function renderPlayer() {
   const t = player.current;
-  const src = !t ? '' : player.source === 'apple' ? 'Apple Music Preview' : player.source === 'spotify' ? 'Spotify' : player.ad ? '<span class="ad-flag">Ad · muted</span>' : player.source === 'yt' ? 'YouTube' : '';
+  const src = !t ? '' : player.source === 'apple' ? 'Apple Music preview' : player.source === 'spotify' ? 'Spotify' : player.ad ? '<span class="ad-flag">Ad · muted</span>' : player.source === 'yt' ? 'YouTube' : '';
   const playBtn = `<button class="ctl ctl-play" data-action="toggle" aria-label="${player.playing ? 'Pause' : 'Play'}">${icon(player.playing ? 'pause' : 'play')}</button>`;
   $('#playerbar').innerHTML = `
     <div class="pb-controls">
@@ -1179,7 +1179,7 @@ function renderQueue() {
   if (q.hidden) return;
   const t = player.current;
   const next = player.upNext;
-  q.innerHTML = `<header><h2>Playing Next</h2><button class="icon-btn" data-action="queue" aria-label="Close">${icon('close')}</button></header>
+  q.innerHTML = `<header><h2>Playing next</h2><button class="icon-btn" data-action="queue" aria-label="Close">${icon('close')}</button></header>
     ${t ? `<div class="queue-now">${t.cover ? `<img src="${esc(t.cover)}" alt="">` : ''}<div><span>${esc(t.title)}</span><small>${esc(t.artist)}</small></div></div>` : '<p class="foot-note">Nothing playing.</p>'}
     <div class="queue-list">${next.slice(0, 200).map((x, i) => `<button class="queue-row" data-jump="${i}">${x.thumb || x.cover ? `<img src="${esc(x.thumb || x.cover)}" alt="" loading="lazy">` : ''}<span><span>${esc(x.title)}</span><small>${esc(x.artist)}</small></span></button>`).join('')}</div>
     ${next.length > 200 ? `<p class="foot-note">+ ${next.length - 200} more</p>` : ''}`;
@@ -1196,7 +1196,7 @@ function renderSheet() {
     ${yt && sheetVideo ? '<div class="sheet-art" id="sheet-video"></div><p class="sheet-hint">To keep listening outside Safari, tap fullscreen in the video, then swipe home.</p>'
       : `<a class="sheet-art" href="#/album/${t.rid}" data-action="close-sheet">${t.cover ? `<img src="${esc(t.cover)}" alt="">` : icon('note')}</a>`}
     <div class="sheet-meta"><div><h2>${esc(t.title)}</h2><p>${esc(t.artist)} — ${esc(t.album)}</p></div>
-      ${yt ? `<button class="icon-btn round ${sheetVideo ? 'on' : ''}" data-action="sheet-video" aria-label="${sheetVideo ? 'Show Artwork' : 'Show Video'}">${icon('pip')}</button>` : ''}
+      ${yt ? `<button class="icon-btn round ${sheetVideo ? 'on' : ''}" data-action="sheet-video" aria-label="${sheetVideo ? 'Show artwork' : 'Show video'}">${icon('pip')}</button>` : ''}
       <button class="icon-btn round" data-more-current aria-label="More">${icon('more')}</button></div>
     <div class="lcd-progress big"><input type="range" class="scrub" min="0" max="1000" value="0" aria-label="Seek"><div class="times"><span class="t-cur"></span><span class="sheet-src">${player.source === 'apple' ? 'Preview' : player.ad ? '<span class="ad-flag">Ad · muted</span>' : ''}</span><span class="t-dur"></span></div></div>
     <div class="sheet-controls">
@@ -1206,7 +1206,7 @@ function renderSheet() {
       <button class="ctl big" data-action="next">${icon('next')}</button>
       <button class="ctl small ${player.repeat !== 'off' ? 'on' : ''}" data-action="repeat">${icon(player.repeat === 'one' ? 'repeat1' : 'repeat')}</button>
     </div>
-    <div class="sheet-queue"><h3>Playing Next</h3>${player.upNext.slice(0, 30).map((x, i) => `<button class="queue-row" data-jump="${i}">${x.thumb ? `<img src="${esc(x.thumb)}" alt="" loading="lazy">` : ''}<span><span>${esc(x.title)}</span><small>${esc(x.artist)}</small></span></button>`).join('') || '<p class="foot-note">Nothing queued.</p>'}</div>
+    <div class="sheet-queue"><h3>Playing next</h3>${player.upNext.slice(0, 30).map((x, i) => `<button class="queue-row" data-jump="${i}">${x.thumb ? `<img src="${esc(x.thumb)}" alt="" loading="lazy">` : ''}<span><span>${esc(x.title)}</span><small>${esc(x.artist)}</small></span></button>`).join('') || '<p class="foot-note">Nothing queued.</p>'}</div>
   </div>`;
   updateProgress();
   placeVideo();
@@ -1253,7 +1253,7 @@ function addToPlaylistEntry(items) {
   return {
     label: 'Add to Playlist',
     submenu: [
-      { label: 'New Playlist…', run: () => newPlaylist(items) },
+      { label: 'New playlist…', run: () => newPlaylist(items) },
       ...playlists.all.filter((p) => !p.smart).map((p) => ({ label: p.name, run: () => { playlists.add(p.id, items); toast(`Added to ${p.name}`); } })),
     ],
   };
@@ -1261,7 +1261,7 @@ function addToPlaylistEntry(items) {
 
 function itemMenu(anchor, items, extra = []) {
   openMenu(anchor, [
-    { label: 'Play Next', icon: 'next', run: () => { player.playNext(items); toast('Playing next'); } },
+    { label: 'Play next', icon: 'next', run: () => { player.playNext(items); toast('Playing next'); } },
     { label: 'Add to Queue', icon: 'queue', run: () => { player.addToQueue(items); toast('Added to queue'); } },
     '-',
     ...extra,
@@ -1270,7 +1270,7 @@ function itemMenu(anchor, items, extra = []) {
 }
 
 function newPlaylist(items = []) {
-  const name = prompt('Playlist name', 'New Playlist');
+  const name = prompt('Playlist name', 'New playlist');
   if (name === null) return;
   const p = playlists.create(name.trim(), items);
   if (items.length) toast(`Added to ${p.name}`);
@@ -1355,9 +1355,9 @@ function bindGlobal() {
     if ((x = el('[data-more-playlist]'))) {
       const p = playlists.get(x.dataset.morePlaylist);
       return openMenu(x, [
-        ...(p.smart ? [{ label: 'Edit Rules…', icon: 'sparkles', run: () => smartEditor(p) }] : []),
+        ...(p.smart ? [{ label: 'Edit rules…', icon: 'sparkles', run: () => smartEditor(p) }] : []),
         { label: 'Rename…', icon: 'pencil', run: () => { const n = prompt('Rename playlist', p.name); if (n) playlists.rename(p.id, n.trim()); } },
-        { label: 'Delete Playlist', icon: 'close', danger: true, run: () => { if (confirm(`Delete “${p.name}”?`)) { playlists.remove(p.id); go('#/playlists'); } } },
+        { label: 'Delete playlist', icon: 'close', danger: true, run: () => { if (confirm(`Delete “${p.name}”?`)) { playlists.remove(p.id); go('#/playlists'); } } },
       ]);
     }
     if ((x = el('[data-play-mix]'))) {
