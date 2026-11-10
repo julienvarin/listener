@@ -139,22 +139,24 @@ export class Player extends EventTarget {
     this.loading = true;
     this.emit('track');
     this.updateMediaMetadata(item);
-    if (item.yt) {
-      this.source = 'yt';
-      const yt = await this.ytReady;
-      if (token !== this.loadToken) return;
-      Object.assign(this, { held: false, clock: -1, moved: Date.now() });
-      yt.loadVideoById(item.yt);
-      return;
-    }
+    // Spotify (full tracks with a logged-in Premium browser), then Apple previews, then YouTube.
+    if (item.spotify) return this.playSpotify(item, token);
     await this.playApple(item, token);
+  }
+
+  async playYouTube(item, token) {
+    this.source = 'yt';
+    const yt = await this.ytReady;
+    if (token !== this.loadToken) return;
+    Object.assign(this, { held: false, clock: -1, moved: Date.now() });
+    yt.loadVideoById(item.yt);
   }
 
   async playApple(item, token) {
     const preview = await applePreview(item);
     if (token !== this.loadToken) return;
     if (!preview) {
-      if (item.spotify) return this.playSpotify(item, token);
+      if (item.yt) return this.playYouTube(item, token);
       this.emit('unavailable');
       return this.advance();
     }
@@ -233,7 +235,8 @@ export class Player extends EventTarget {
     const item = this.current;
     if (this.source !== 'yt' || !item) return;
     this.source = null;
-    this.playApple(item, this.loadToken);
+    this.emit('unavailable');
+    this.advance();
   }
 
   setPlaying(v) {

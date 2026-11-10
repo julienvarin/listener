@@ -1,6 +1,8 @@
 # Listener
 
-An Apple Music–style player for my Discogs collection. Audio comes from the YouTube videos linked on each release (played audio-only), then Apple Music 30-second previews, then Spotify (full tracks when the browser is logged in to Spotify, 30-second previews otherwise).
+An Apple Music–style player for my Discogs collection and the digital files on my computer. Audio comes from Spotify (full tracks when the browser is logged in to a Premium account, 30-second previews otherwise), then Apple Music 30-second previews, then the YouTube videos linked on each release (played audio-only).
+
+- Switch between All, Records, CDs and Digital at the top of the sidebar (or of Listen now and Library on the phone)
 
 - Browse by artist, label, genre, style, decade, format, country, and my own Discogs note fields (genre tag, condition, tag)
 - Instant search across titles, artists, labels, catalog numbers, tracks and notes (`⌘K` or `/`)
@@ -10,6 +12,19 @@ An Apple Music–style player for my Discogs collection. Audio comes from the Yo
 - Smart playlists: rules that fill a playlist by themselves (date added, year, genre, style, your tags, moods from notes, country, label, condition, have / want, copies for sale, price, estimated value, rating…), matching all or any. A rule can hold several values (style is House or Tech House), and groups nest an any/all inside another, e.g. style is House or Tech House, fewer than 500 have, and (country France or Belgium). Order, songs per record and a limit
 - Playlists synced across devices through a private GitHub Gist
 - Works on the phone (add to home screen)
+
+## Digital collection
+
+`scripts/digital.py` reads the tags of the music files in the folders you give it (MP3, FLAC, AIFF, WAV, M4A; untagged files by their `Artist - Title` name), groups them into releases by album tag, and finds artwork for each on Deezer: the album cover, else the cover of the album the track is on, else a photo of the artist. Records still without one get the stand-in white label. The files never leave the computer; only the tags go into `data/digital.enc`, encrypted with `DIGITAL_KEY`.
+
+```bash
+.venv/bin/pip install mutagen cryptography
+.venv/bin/python scripts/digital.py ~/Documents/04-music-files   # first run writes .digital_key
+gh secret set DIGITAL_KEY < .digital_key
+git add data/digital.enc && git commit -m "update digital collection" && git push
+```
+
+Re-run it after adding files; artwork already found is kept. Builds look up Spotify tracks for digital releases first, then Apple previews.
 
 ## Track notes
 
@@ -72,7 +87,8 @@ Repo secrets (Settings → Secrets and variables → Actions):
 | `DISCOGS_USERNAME` | Discogs username |
 | `LISTENER_PASSWORD` | Password for the site |
 | `GIST_TOKEN` | Classic GitHub token with only the `gist` scope (playlist sync) |
-| `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` | Optional. From an app at developer.spotify.com/dashboard (Web API). Nightly and manual builds then look up Spotify tracks for records YouTube and Apple can't play |
+| `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` | From an app at developer.spotify.com/dashboard (Web API). Nightly and manual builds then look up Spotify tracks (1,500 a run, digital first), which play before Apple and YouTube |
+| `DIGITAL_KEY` | Optional. The key in `.digital_key`, written by `scripts/digital.py` |
 
 Pages must be set to deploy from GitHub Actions. Then run the **Build and deploy** workflow. The first run fetches every release (about 45 minutes at Discogs' rate limit).
 
