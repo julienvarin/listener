@@ -61,6 +61,7 @@ jobs:
           LISTENER_PASSWORD: ${{ secrets.LISTENER_PASSWORD }}
           GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
           CLUSTER_KEY: ${{ secrets.CLUSTER_KEY }}
+          DIGITAL_KEY: ${{ secrets.DIGITAL_KEY }}
           SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
           SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
         # Slow lookups (market refresh, Apple previews) only run nightly so pushes deploy in minutes.

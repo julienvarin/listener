@@ -217,7 +217,7 @@ def add_apple(releases: list, cache: dict, budget: int) -> None:
         old = cache.get(r["id"], {}).get("apple")
         if old is not None and len(old) == len(r.get("tracks", [])):
             r["apple"] = old
-    todo = [r for r in releases if r.get("stats_at") and not r.get("videos") and r.get("tracks") and "apple" not in r]
+    todo = [r for r in releases if (r.get("stats_at") or r.get("digital")) and not r.get("videos") and r.get("tracks") and "apple" not in r]
     print(f"looking up Apple previews for {min(len(todo), budget)} of {len(todo)} records without videos", file=sys.stderr)
     for r in todo:
         if budget <= 0:
@@ -274,13 +274,14 @@ class Spotify:
 
 
 def add_spotify(releases: list, cache: dict, budget: int) -> None:
-    """Find Spotify tracks for what neither YouTube nor Apple can play. Needs SPOTIFY_CLIENT_ID/SECRET."""
+    """Find Spotify tracks, the first choice for playback. Needs SPOTIFY_CLIENT_ID/SECRET."""
     for r in releases:
         old = cache.get(r["id"], {}).get("spotify")
         if old is not None and len(old) == len(r.get("tracks", [])):
             r["spotify"] = old
     client_id, secret = os.environ.get("SPOTIFY_CLIENT_ID"), os.environ.get("SPOTIFY_CLIENT_SECRET")
-    todo = [r for r in releases if r.get("apple") is not None and not all(r["apple"]) and r.get("tracks") and "spotify" not in r]
+    # Digital first: it has no YouTube videos to fall back on.
+    todo = sorted((r for r in releases if r.get("tracks") and "spotify" not in r), key=lambda r: not r.get("digital"))
     if not (client_id and secret and budget and todo):
         return
     try:
@@ -293,10 +294,7 @@ def add_spotify(releases: list, cache: dict, budget: int) -> None:
         if budget <= 0:
             return
         try:
-            r["spotify"] = [
-                None if apple else api.find(t["title"] or "Untitled", ", ".join(t.get("artists") or r["artists"]) or "Unknown Artist")
-                for t, apple in zip(r["tracks"], r["apple"])
-            ]
+            r["spotify"] = [api.find(t["title"] or "Untitled", ", ".join(t.get("artists") or r["artists"]) or "Unknown Artist") for t in r["tracks"]]
         except (urllib.error.URLError, TimeoutError, ValueError) as e:
             print(f"  skipped Spotify lookup for {r['id']}: {e}", file=sys.stderr)
             continue
@@ -311,6 +309,16 @@ def add_history(r: dict) -> None:
     point = [r["stats_at"], r.get("lowest_price"), r.get("for_sale", 0), (r.get("suggest") or {}).get("Very Good Plus (VG+)")]
     hist = [h for h in r.get("hist", []) if h[0] != point[0]]
     r["hist"] = (hist + [point])[-HISTORY:]
+
+
+def load_digital(path: str) -> list:
+    """The digital shelf scanned from local files by scripts/digital.py."""
+    if not (os.environ.get("DIGITAL_KEY") and Path(path).exists()):
+        return []
+    from seed_clusters import load_key, unseal
+    releases = unseal(Path(path).read_bytes(), load_key(os.environ["DIGITAL_KEY"]))["releases"]
+    print(f"digital: {len(releases)} releases", file=sys.stderr)
+    return releases
 
 
 DETAIL_KEYS = ("country", "released", "tracks", "videos", "have", "want", "community_rating", "votes", "lowest_price", "for_sale", "stats_at")
@@ -328,6 +336,7 @@ def main() -> None:
     ap.add_argument("--workers", type=int, default=4, help="Discogs requests in flight at once")
     ap.add_argument("--max-rate", type=float, default=0, help="cap on Discogs requests a minute (0 = whatever Discogs allows)")
     ap.add_argument("--no-suggestions", action="store_true", help="skip Discogs price suggestions")
+    ap.add_argument("--digital", default="data/digital.enc", help="local music files from scripts/digital.py, decrypted with DIGITAL_KEY")
     ap.add_argument("--seed", default="data/clusters.enc", help="curated clusters, decrypted with CLUSTER_KEY")
     args = ap.parse_args()
 
@@ -344,7 +353,7 @@ def main() -> None:
             previous_payload = decrypt(blob, password)
             previous = previous_payload["releases"]
             entities = previous_payload.get("entities", {})
-            cache = {r["id"]: r for r in previous if "stats_at" in r}
+            cache = {r["id"]: r for r in previous if "stats_at" in r or r.get("digital")}
             if previous_payload.get("layout") == LAYOUT_VERSION:
                 positions = {r["id"]: r["xy"] for r in previous if "xy" in r}
             salt = blob[8:24]
@@ -470,6 +479,7 @@ def main() -> None:
             f.write(f"entities_left={left}\n")
     print(f"artist and label profiles done in {elapsed()}", file=sys.stderr)
 
+    releases += load_digital(args.digital)
     add_apple(releases, cache, args.apple)
     add_spotify(releases, cache, args.spotify)
     if args.audio:
@@ -489,7 +499,7 @@ def main() -> None:
     except ImportError as e:
         print(f"skipping collection map ({e})", file=sys.stderr)
     else:
-        clusters, regions = add_map(releases, positions, seed)
+        clusters, regions = add_map([r for r in releases if not r.get("digital")], positions, seed)
     save()
     print(f"done: {fetched} releases fetched, bundle at {out}", file=sys.stderr)
 

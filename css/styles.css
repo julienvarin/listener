@@ -682,3 +682,9 @@ img { display: block; }
 .entity-about .chips { margin-top: 16px; }
 .row-note { display: flex; align-items: center; gap: 5px; font-size: 12.5px; color: #8a5a00; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row-note .i { width: 12px; height: 12px; flex: none; }
+
+.shelf-switch { display: flex; gap: 2px; margin: 0 4px 10px; padding: 2px; border-radius: 9px; background: var(--fill2); }
+.shelf-switch button { flex: 1; height: 26px; padding: 0 8px; border-radius: 7px; font-size: 12px; font-weight: 500; color: var(--text2); }
+.shelf-switch button[aria-pressed="true"] { background: var(--bg); color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12); }
+.view-head .shelf-switch { display: none; max-width: 360px; margin: 0 0 12px; }
+@media (max-width: 760px) { .view-head .shelf-switch { display: flex; } }

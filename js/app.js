@@ -59,8 +59,30 @@ async function boot() {
   });
 }
 
+// Which part of the collection is on show: everything, vinyl, CDs or the digital files on my computer.
+const SHELVES = [
+  ['all', 'All', () => true],
+  ['records', 'Records', (r) => r.formats.includes('Vinyl')],
+  ['cds', 'CDs', (r) => r.formats.includes('CD')],
+  ['digital', 'Digital', (r) => r.digital || r.formats.includes('File')],
+];
+let shelfId = 'all';
+try { shelfId = localStorage.getItem('listener.shelf') || 'all'; } catch {}
+let fullLib;
+
+function loadShelf() {
+  const [, , keep] = SHELVES.find(([id]) => id === shelfId) || SHELVES[0];
+  lib = keep === SHELVES[0][2] ? fullLib : new Library({ ...fullLib.payload, releases: fullLib.payload.releases.filter(keep) });
+}
+
+const shelfSwitch = () => `<div class="shelf-switch" role="group" aria-label="Collection">${SHELVES.map(([id, label]) =>
+  `<button data-shelf="${id}" aria-pressed="${id === shelfId}">${label}</button>`).join('')}</div>`;
+
 function start(payload) {
-  lib = new Library(payload);
+  // The full library first: it also gives cover-less records their stand-in artwork before a shelf filters them.
+  fullLib = new Library(payload);
+  fullLib.payload = payload;
+  loadShelf();
   player = new Player();
   player.autoplay = autoplayNext;
   playlists = new Playlists();
@@ -169,6 +191,7 @@ function renderSidebar() {
   const focused = prev && document.activeElement === prev ? [prev.selectionStart, prev.selectionEnd] : null;
   $('#sidebar').innerHTML = `
     <div class="side-brand"><img src="icon.svg" alt=""><span>Listener</span></div>
+    ${shelfSwitch()}
     <label class="side-search">${icon('search')}<input id="search" type="search" placeholder="Search" autocomplete="off" spellcheck="false" value="${esc(search)}"><kbd>⌘K</kbd></label>
     <nav class="side-nav">
       <h6>Library</h6>
@@ -235,8 +258,9 @@ function mountChunks(container, items, renderItem, chunk = 96) {
   if (i < items.length) io.observe(sentinel);
 }
 
-function header(title, { kicker = '', sub = '', actions = true, extra = '' } = {}) {
+function header(title, { kicker = '', sub = '', actions = true, extra = '', shelves = false } = {}) {
   return `<header class="view-head">
+    ${shelves ? shelfSwitch() : ''}
     ${kicker ? `<p class="kicker">${esc(kicker)}</p>` : ''}
     <div class="view-head-row">
       <h1>${esc(title)}</h1>
@@ -312,7 +336,7 @@ function toolbar(base, q, defaultSort, skip = []) {
 function browseView(title, base, r, { sort: defaultSort }) {
   const tb = toolbar(base, r.q, defaultSort);
   viewReleases = tb.filtered.slice().sort(SORTS[tb.sort][1]);
-  $('#main').innerHTML = `${header(title, { extra: tb.html })}<div class="grid" id="grid"></div>`;
+  $('#main').innerHTML = `${header(title, { extra: tb.html, shelves: true })}<div class="grid" id="grid"></div>`;
   mountChunks($('#grid'), viewReleases, card);
 }
 
@@ -536,7 +560,7 @@ function tilesView(title, map, kind, sorter = (a, b) => b[1].length - a[1].lengt
 
 function libraryView() {
   viewReleases = [];
-  $('#main').innerHTML = `${header('Library', { actions: false })}
+  $('#main').innerHTML = `${header('Library', { actions: false, shelves: true })}
     <nav class="library-links">${NAV.map(([id, label, ic]) => `<a href="#/${id}">${icon(ic)}<span>${label}</span>${icon('chevron-right')}</a>`).join('')}</nav>
     <h2 class="section-title">Recently added</h2>
     <div class="grid">${lib.releases.slice().sort(SORTS.added[1]).slice(0, 12).map((r) => card(r)).join('')}</div>
@@ -559,8 +583,9 @@ function registerList(items) {
 function trackRows(items, { list, numbered = true, covers = false, playlistId = null } = {}) {
   const id = list || registerList(items);
   return items.map((t, i) => {
-    const apple = t.yt ? undefined : appleCached(t);
-    const state = t.yt ? '' : apple === null ? (t.spotify ? 'spotify' : 'unavailable') : 'preview';
+    // Playback order is Spotify, Apple preview, YouTube: flag only what isn't a full track.
+    const apple = t.spotify ? undefined : appleCached(t);
+    const state = t.spotify ? '' : apple === null ? (t.yt ? '' : 'unavailable') : apple || !t.yt ? 'preview' : '';
     const feel = [t.bpm ? `${Math.round(t.bpm)} BPM` : '', t.energy != null ? `E${Math.round(t.energy)}` : ''].filter(Boolean).join(' · ');
     return `<div class="row ${state}" data-list="${id}" data-index="${i}" data-rid="${t.rid}" data-key="${t.key}" ${playlistId ? 'draggable="true"' : ''}>
       <span class="row-lead">${covers
@@ -568,7 +593,7 @@ function trackRows(items, { list, numbered = true, covers = false, playlistId = 
         : `<span class="row-num">${esc(numbered ? t.pos || i + 1 : '')}</span>`}
         <span class="row-eq"><i></i><i></i><i></i></span><span class="row-playicon">${icon('play')}</span></span>
       <span class="row-main"><span class="row-title">${esc(t.title)}</span>${covers ? `<span class="row-sub">${esc(t.artist)} — <a href="#/album/${t.rid}">${esc(t.album)}</a></span>` : t.artistDiffers ? `<span class="row-sub">${esc(t.artist)}</span>` : ''}${t.note ? `<span class="row-note">${icon('pencil')}${esc(t.note)}</span>` : ''}</span>
-      <span class="row-tags">${feel ? `<span class="row-feel" title="Tempo · energy from 0 (calmest) to 10 (most intense)">${feel}</span>` : ''}${state === 'preview' ? '<span class="badge">Preview</span>' : state === 'spotify' ? '<span class="badge">Spotify</span>' : state === 'unavailable' ? '<span class="badge muted">No audio</span>' : ''}</span>
+      <span class="row-tags">${feel ? `<span class="row-feel" title="Tempo · energy from 0 (calmest) to 10 (most intense)">${feel}</span>` : ''}${state === 'preview' ? '<span class="badge">Preview</span>' : state === 'unavailable' ? '<span class="badge muted">No audio</span>' : ''}</span>
       <span class="row-dur">${esc(t.dur || '')}</span>
       <button class="icon-btn row-more" data-more-track ${playlistId ? `data-playlist="${playlistId}"` : ''} aria-label="More">${icon('more')}</button>
     </div>`;
@@ -625,7 +650,7 @@ function albumView(r) {
       ${r.genres.length ? `<div><dt>Genre</dt><dd>${r.genres.map((g) => `<a href="#/genre/${enc(g)}">${esc(g)}</a>`).join(', ')}</dd></div>` : ''}
       ${added ? `<div><dt>Added</dt><dd>${added}${r.copies > 1 ? ` · ${r.copies} copies` : ''}</dd></div>` : ''}
       ${['Media Condition', 'Sleeve Condition', 'Tag'].filter((k) => r.notes[k]).map((k) => `<div><dt>${k.replace(' Condition', '')}</dt><dd>${esc(r.notes[k])}</dd></div>`).join('')}
-      <div><dt>Discogs</dt><dd><a href="https://www.discogs.com/release/${r.id}" target="_blank" rel="noopener">View release ↗</a> · <a href="https://www.discogs.com/sell/release/${r.id}" target="_blank" rel="noopener">Marketplace ↗</a></dd></div>
+      ${r.digital ? '' : `<div><dt>Discogs</dt><dd><a href="https://www.discogs.com/release/${r.id}" target="_blank" rel="noopener">View release ↗</a> · <a href="https://www.discogs.com/sell/release/${r.id}" target="_blank" rel="noopener">Marketplace ↗</a></dd></div>`}
       <div><dt>Listen elsewhere</dt><dd><a href="https://open.spotify.com/search/${enc(`${r.artists[0] || ''} ${r.title}`)}" target="_blank" rel="noopener">Spotify ↗</a> · <a href="https://music.apple.com/search?term=${enc(`${r.artists[0] || ''} ${r.title}`)}" target="_blank" rel="noopener">Apple Music ↗</a> · <a href="https://www.youtube.com/results?search_query=${enc(`${r.artists[0] || ''} ${r.title}`)}" target="_blank" rel="noopener">YouTube ↗</a></dd></div>
     </dl>
     ${shelf('Similar in Your Collection', (r.similar || []).map((id) => lib.byId.get(id)).filter(Boolean), `#/map?focus=${r.id}`)}
@@ -758,7 +783,7 @@ function discoverView() {
   const hello = hour < 5 ? 'Late night digging' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
   const all = shelves();
   const [first, ...rest] = all;
-  $('#main').innerHTML = `${header('Listen now', { actions: false, kicker: hello })}
+  $('#main').innerHTML = `${header('Listen now', { actions: false, kicker: hello, shelves: true })}
     ${first ? `<section class="hero-shelf">${first.list.slice(0, 5).map((r, i) => `<a class="feature ${i ? '' : 'big'} ${lib.silent(r) ? 'silent' : ''}" href="#/album/${r.id}">${art(r)}<span class="feature-text"><small>${i ? '' : esc(first.title)}</small><b>${esc(r.title)}</b><span>${esc(r.artist)}</span></span><button class="card-play" data-play-album="${r.id}" aria-label="Play">${icon('play')}</button></a>`).join('')}</section>
       <div class="hero-actions"><button class="btn btn-primary" data-action="shuffle-rediscover">${icon('shuffle')}Shuffle rediscover</button><a class="btn" href="#/list/rediscover">See all</a></div>` : ''}
     ${mixShelf()}
@@ -1088,12 +1113,14 @@ function searchKeepFocus(q) {
 
 /* ---------- playing things ---------- */
 
+const full = (t) => t.spotify || t.yt;  // full-length tracks, preferred when shuffling
+
 function releaseQueue(releases, { shuffle = false, cap = 600 } = {}) {
   const pool = shuffle ? releases.slice().sort(() => Math.random() - 0.5) : releases;
   const out = [];
   for (const r of pool) {
     const items = lib.playable(r);
-    out.push(...(shuffle ? items.filter((t) => t.yt) : items));
+    out.push(...(shuffle ? items.filter(full) : items));
     if (out.length >= cap) break;
   }
   return out;
@@ -1124,7 +1151,7 @@ function autoplayNext() {
   const r = pick(autoplayPool) || pick(lib.releases);
   if (!r) return [];
   const items = lib.playable(r);
-  return shuffleWith(items.some((t) => t.yt) ? items.filter((t) => t.yt) : items, Math.random);
+  return shuffleWith(items.some(full) ? items.filter(full) : items, Math.random);
 }
 
 /* ---------- player UI ---------- */
@@ -1328,6 +1355,13 @@ function bindGlobal() {
     const t = e.target;
     const el = (sel) => t.closest(sel);
     let x;
+    if ((x = el('[data-shelf]'))) {
+      shelfId = x.dataset.shelf;
+      try { localStorage.setItem('listener.shelf', shelfId); } catch {}
+      loadShelf();
+      renderSidebar();
+      return render();
+    }
     if ((x = el('[data-play-album]'))) {
       e.preventDefault();
       return playReleases([lib.byId.get(Number(x.dataset.playAlbum))], player.shuffle);
@@ -1337,7 +1371,7 @@ function bindGlobal() {
       const r = lib.byId.get(Number(x.dataset.moreAlbum));
       return itemMenu(x, lib.playable(r), [
         { label: 'Go to Artist', icon: 'mic', run: () => go(`#/artist/${enc(r.artists[0] || '')}`) },
-        { label: 'View on Discogs', icon: 'link', run: () => open(`https://www.discogs.com/release/${r.id}`, '_blank', 'noopener') },
+        ...(r.digital ? [] : [{ label: 'View on Discogs', icon: 'link', run: () => open(`https://www.discogs.com/release/${r.id}`, '_blank', 'noopener') }]),
       ]);
     }
     if ((x = el('[data-more-track]'))) {
