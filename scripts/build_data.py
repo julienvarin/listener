@@ -237,6 +237,10 @@ def add_apple(releases: list, cache: dict, budget: int) -> None:
         budget -= len(found)
 
 
+class SpotifyLimited(Exception):
+    pass
+
+
 class Spotify:
     """Track search with an app token (client credentials): no user login needed to find IDs."""
 
@@ -261,7 +265,10 @@ class Spotify:
             except urllib.error.HTTPError as e:
                 if e.code != 429:
                     raise
-                time.sleep(int(e.headers.get("Retry-After", 5)) + 1)
+                wait = int(e.headers.get("Retry-After", 5))
+                if wait > 30:  # Spotify can ask for hours; the next build picks up where this one stopped
+                    raise SpotifyLimited(wait) from e
+                time.sleep(wait + 1)
         else:
             return None
         words = norm(title).split(" ")
@@ -289,16 +296,21 @@ def add_spotify(releases: list, cache: dict, budget: int) -> None:
     except (urllib.error.URLError, KeyError, ValueError) as e:
         print(f"Spotify login failed ({e}); skipping", file=sys.stderr)
         return
-    print(f"looking up Spotify for {len(todo)} silent records", file=sys.stderr)
+    print(f"looking up Spotify for {len(todo)} records", file=sys.stderr)
     for r in todo:
         if budget <= 0:
             return
         try:
             r["spotify"] = [api.find(t["title"] or "Untitled", ", ".join(t.get("artists") or r["artists"]) or "Unknown Artist") for t in r["tracks"]]
+        except SpotifyLimited as e:
+            print(f"  Spotify asked to wait {e.args[0]}s; the rest waits for the next build", file=sys.stderr)
+            return
         except (urllib.error.URLError, TimeoutError, ValueError) as e:
             print(f"  skipped Spotify lookup for {r['id']}: {e}", file=sys.stderr)
             continue
         budget -= len(r["tracks"])
+        found = sum(bool(x) for r in releases for x in r.get("spotify") or [])
+        print(f"  Spotify: {found} tracks found, {budget} lookups left this run", file=sys.stderr) if budget // 100 != (budget + len(r["tracks"])) // 100 else None
         time.sleep(0.3)
 
 
